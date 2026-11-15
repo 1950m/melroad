@@ -15,15 +15,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.dp
 import com.studio1950.melroad.ui.theme.ActiveBlue
 import kotlin.math.PI
 import kotlin.math.max
@@ -36,7 +41,8 @@ val SceneBackground = Color(0xFFEEF2F6)
 
 /**
  * 장식용 주행 장면: 위에서 비스듬히 내려다본 차선과 단순한 세단 뒷모습.
- * 자동차 주변만 보이고 바깥은 바탕색으로 페이드아웃된다. 길 안내·지도 기능이 아니며 화면 낭독기에서는 숨긴다.
+ * 자동차 주변만 보이고 바깥은 하늘빛 바탕으로 사라진다. 길 끝의 빛과 천천히 스치는 빛망울로 분위기를 낸다.
+ * 길 안내·지도 기능이 아니며 화면 낭독기에서는 숨긴다. 기기에서 애니메이션을 끄면 빛망울은 그리지 않는다.
  *
  * @param speedKmh 차선이 흐르는 속도(표시용, 실제 속도의 일부만 반영)
  * @param curve -1(왼쪽)..1(오른쪽) 도로가 휘는 정도
@@ -73,12 +79,44 @@ fun DriveScene(
         }
     }
 
+    val reducedMotion = rememberReducedMotion()
+
     Canvas(modifier.clearAndSetSemantics { }) {
         val w = size.width
         val h = size.height
-        drawRect(SceneBackground)
+        // 하늘빛 바탕: 위는 옅은 하늘색, 아래로 갈수록 차분한 회백색
+        drawRect(Brush.verticalGradient(0f to Color(0xFFDDE8F3), 0.5f to Color(0xFFF2F5F9), 1f to SceneBackground))
         val view = View(w, h, vanishY = -h * (0.25f + climbAnim * 0.06f), curve = curveAnim)
+
+        // 도로는 따로 겹을 만들어 자동차 주변만 남기고 바깥은 투명하게 사라지게 한다(바탕 하늘빛이 비쳐 보이도록).
+        drawIntoCanvas { it.saveLayer(Rect(Offset.Zero, size), Paint()) }
         drawRoad(view, phase, playing, time)
+        drawRect(
+            Brush.radialGradient(
+                0f to Color.Black,
+                0.40f to Color.Black,
+                0.84f to Color.Transparent,
+                center = Offset(w * 0.5f, h * 0.64f),
+                radius = max(w, h) * 0.62f,
+            ),
+            blendMode = BlendMode.DstIn,
+        )
+        drawIntoCanvas { it.restore() }
+
+        // 길 끝에서 번지는 빛: 먼 도로가 빛 속으로 녹아드는 느낌
+        val glowCenter = Offset(w * 0.5f + curveAnim * w * 0.18f, -h * 0.02f)
+        drawCircle(
+            Brush.radialGradient(
+                0f to Color.White,
+                0.35f to Color(0xFFF6F3F2).copy(alpha = 0.75f),
+                1f to Color.White.copy(alpha = 0f),
+                center = glowCenter,
+                radius = w * 0.62f,
+            ),
+            radius = w * 0.62f,
+            center = glowCenter,
+        )
+
         // 자동차는 항상 가운데 차선 중심에 놓는다(그 거리에서의 도로 중심을 투영으로 계산)
         val carY = h * 0.70f
         val carD = (h - view.vanishY) / (carY - view.vanishY)
@@ -86,17 +124,35 @@ fun DriveScene(
         // 모형처럼 작게: 도로 폭 대비 차 폭이 과하지 않도록 한다.
         val carWidth = min(w * 0.095f, h * 0.13f)
         drawSedan(carCenter, carWidth, curveAnim, if (playing) time else 0f, playing)
-        // 바깥쪽 페이드아웃: 자동차 주변만 남긴다
-        val radius = max(w, h) * 0.62f
-        drawRect(
+
+        if (!reducedMotion) drawLightMotes(w, h, time, curveAnim, playing)
+    }
+}
+
+/**
+ * 천천히 다가와 스쳐 지나가는 빛망울. 길 끝에서 생겨 화면 가장자리로 퍼지며 사라진다.
+ * 위치는 시간과 번호로만 정해져 매번 같은 흐름이고, 깜빡임 없이 서서히 나타나고 사라진다.
+ */
+private fun DrawScope.drawLightMotes(w: Float, h: Float, time: Float, curve: Float, playing: Boolean) {
+    for (i in 0 until 12) {
+        val period = (9f + (i * 37 % 7)) * (if (playing) 1f else 1.6f)
+        val u = (time / period + i * 0.618034f) % 1f
+        val side = if (i % 2 == 0) -1f else 1f
+        val spread = 0.25f + ((i * 53) % 10) / 10f * 0.55f
+        val x = w * 0.5f + curve * w * 0.15f * (1f - u) + side * spread * w * 0.55f * u * u
+        val y = h * 0.02f + h * u.pow(1.5f)
+        val r = (1.5f + 6f * u).dp.toPx() * 2.2f
+        val a = sin(PI.toFloat() * u).pow(1.5f) * (if (playing) 0.55f else 0.32f)
+        drawCircle(
             Brush.radialGradient(
-                0f to Color.Transparent,
-                0.38f to Color.Transparent,
-                0.82f to SceneBackground,
-                1f to SceneBackground,
-                center = Offset(w * 0.5f, h * 0.64f),
-                radius = radius,
+                0f to Color.White.copy(alpha = a),
+                0.4f to ActiveBlue.copy(alpha = a * 0.22f),
+                1f to Color.Transparent,
+                center = Offset(x, y),
+                radius = r,
             ),
+            radius = r,
+            center = Offset(x, y),
         )
     }
 }

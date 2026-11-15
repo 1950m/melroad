@@ -3,6 +3,14 @@ package com.studio1950.melroad.ui
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,9 +72,26 @@ fun MelroadRoot(vm: MelroadViewModel) {
     Surface(Modifier.fillMaxSize(), color = Color.Transparent) {
         Column(Modifier.fillMaxSize().background(AppBackground)) {
             message?.let { MessageBanner(stringResource(it)) }
-            Box(Modifier.weight(1f)) {
-                when {
-                    s.isTripActive -> RunningScreen(
+            val key = when {
+                s.isTripActive -> ScreenKey.RUNNING
+                showFinished -> ScreenKey.FINISHED
+                showMemoryPlayer || screen == Screen.MEMORY -> ScreenKey.MEMORY
+                screen == Screen.PREPARE -> ScreenKey.PREPARE
+                screen == Screen.INFO -> ScreenKey.INFO
+                else -> ScreenKey.HOME
+            }
+            // 화면이 바뀔 때 툭 끊기지 않도록, 새 화면이 아주 살짝 다가오며 서서히 나타난다(기존 화면은 빠르게 옅어짐).
+            AnimatedContent(
+                targetState = key,
+                modifier = Modifier.weight(1f).fillMaxSize(),
+                transitionSpec = {
+                    (fadeIn(tween(520, delayMillis = 80, easing = LinearOutSlowInEasing)) + scaleIn(tween(620, easing = FastOutSlowInEasing), initialScale = 0.985f))
+                        .togetherWith(fadeOut(tween(260)))
+                },
+                label = "screen",
+            ) { target ->
+                when (target) {
+                    ScreenKey.RUNNING -> RunningScreen(
                         s = s,
                         events = vm::visibleEvents,
                         position = vm::position,
@@ -74,7 +99,7 @@ fun MelroadRoot(vm: MelroadViewModel) {
                         onResume = vm::resume,
                         onFinish = vm::finishTrip,
                     )
-                    showFinished -> FinishedScreen(
+                    ScreenKey.FINISHED -> FinishedScreen(
                         s = s,
                         driving = driving,
                         events = vm::visibleEvents,
@@ -87,7 +112,7 @@ fun MelroadRoot(vm: MelroadViewModel) {
                         onDiscard = vm::discardDraft,
                         onHome = vm::closeFinished,
                     )
-                    showMemoryPlayer || screen == Screen.MEMORY -> MemoryScreen(
+                    ScreenKey.MEMORY -> MemoryScreen(
                         s = s,
                         trips = trips,
                         driving = driving,
@@ -102,7 +127,7 @@ fun MelroadRoot(vm: MelroadViewModel) {
                         onStop = vm::stopPlayback,
                         onDelete = vm::deleteTrip,
                     )
-                    screen == Screen.PREPARE -> PrepareScreen(
+                    ScreenKey.PREPARE -> PrepareScreen(
                         s = s,
                         driving = driving,
                         onBack = { vm.go(Screen.HOME) },
@@ -110,12 +135,12 @@ fun MelroadRoot(vm: MelroadViewModel) {
                         onStartLive = vm::startLive,
                         onStartDemo = vm::startDemo,
                     )
-                    screen == Screen.INFO -> InfoScreen(
+                    ScreenKey.INFO -> InfoScreen(
                         driving = driving,
                         onBack = { vm.go(Screen.HOME) },
                         onDeleteAll = vm::deleteAll,
                     )
-                    else -> HomeScreen(
+                    ScreenKey.HOME -> HomeScreen(
                         onStartTrip = { vm.go(Screen.PREPARE) },
                         onOurMusic = { vm.go(Screen.MEMORY) },
                         onInfo = { vm.go(Screen.INFO) },
@@ -125,6 +150,9 @@ fun MelroadRoot(vm: MelroadViewModel) {
         }
     }
 }
+
+/** 화면 전환 애니메이션의 기준. 세션 상태와 선택한 화면을 합쳐 지금 보일 화면 하나로 정한다. */
+private enum class ScreenKey { RUNNING, FINISHED, MEMORY, PREPARE, INFO, HOME }
 
 @Composable
 private fun MessageBanner(text: String) {

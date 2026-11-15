@@ -113,6 +113,7 @@
 
     <string name="title_demo_trip">%1$s (시뮬레이션)</string>
     <string name="title_live_trip">%1$s 실제 주행</string>
+    <string name="elapsed_desc">진행 시간 %1$s</string>
     <string name="compass_desc">진행 방향 %1$s쪽</string>
     <string-array name="compass_directions">
         <item>북</item>

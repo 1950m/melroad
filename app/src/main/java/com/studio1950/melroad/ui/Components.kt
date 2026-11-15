@@ -1,6 +1,13 @@
 package com.studio1950.melroad.ui
 
+import android.provider.Settings
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,6 +26,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -29,6 +38,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -46,6 +57,15 @@ import com.studio1950.melroad.ui.theme.SkyBlue
 import com.studio1950.melroad.ui.theme.Subtle
 
 enum class IconKind { PLAY, PAUSE, STOP, BACK, NONE }
+
+/** 기기 접근성 설정에서 애니메이션을 끈 경우 true. 이때는 장식용 움직임(빛망울·배경 빛 흐름)을 멈춘다. */
+@Composable
+fun rememberReducedMotion(): Boolean {
+    val context = LocalContext.current
+    return remember {
+        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+    }
+}
 
 /**
  * 입체감 있는 큰 버튼(최소 88dp). 위쪽이 밝은 그라데이션 + 그림자 + 윗면 하이라이트로 눌러지는 버튼처럼 보이게 했다.
@@ -73,8 +93,16 @@ fun BigButton(
     } else {
         Modifier
     }
+    // 누르는 동안 살짝 가라앉았다가 손을 떼면 부드럽게 돌아온다.
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow), label = "press")
     Box(
         modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .fillMaxWidth()
             .heightIn(min = 88.dp)
             .alpha(if (enabled) 1f else 0.4f)
@@ -90,7 +118,7 @@ fun BigButton(
                 },
                 shape = shape,
             )
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .clickable(interactionSource = interaction, indication = LocalIndication.current, enabled = enabled, role = Role.Button, onClick = onClick)
             .then(semanticsModifier)
             .padding(horizontal = 24.dp, vertical = 16.dp),
         contentAlignment = Alignment.Center,

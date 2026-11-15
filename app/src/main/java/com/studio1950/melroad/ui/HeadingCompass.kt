@@ -4,22 +4,14 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -33,12 +25,7 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.studio1950.melroad.R
 import com.studio1950.melroad.ui.theme.ActiveRed
 import com.studio1950.melroad.ui.theme.HyundaiBlue
@@ -47,8 +34,8 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * 진행 방향 위쪽 고정 방위계. 다이얼(북 표시)이 돌아가고 가운데 화살표가 늘 진행 방향을 가리킨다.
- * 방향 신호가 있을 때만 호출한다(속도만 있는 경우 방위를 지어내지 않는다).
+ * 진행 방향 위쪽 고정 방위계(글자 없는 실루엣). 다이얼과 북쪽 바늘이 돌아가고 가운데 화살표가 늘 진행 방향을 가리킨다.
+ * 방향 이름은 화면 낭독기 설명으로만 전달한다. 방향 신호가 있을 때만 호출한다(속도만 있으면 방위를 지어내지 않는다).
  *
  * @param headingDeg 0=북, 시계 방향 도
  */
@@ -63,59 +50,58 @@ fun HeadingCompass(headingDeg: Float, modifier: Modifier = Modifier) {
         if (delta < -180f) delta += 360f
         unwrapped += delta
     }
-    val shown by animateFloatAsState(unwrapped, spring(stiffness = Spring.StiffnessLow), label = "heading")
+    val shown by animateFloatAsState(unwrapped, spring(stiffness = Spring.StiffnessVeryLow), label = "heading")
 
     val names = stringArrayResource(R.array.compass_directions)
     val normalized = ((headingDeg % 360f) + 360f) % 360f
     val name = names[((normalized + 22.5f) / 45f).toInt() % names.size]
     val description = stringResource(R.string.compass_desc, name)
-    val measurer = rememberTextMeasurer()
-    val shape = RoundedCornerShape(40.dp)
 
-    Row(
+    Canvas(
         modifier
-            .shadow(6.dp, shape, ambientColor = HyundaiBlue.copy(alpha = 0.3f), spotColor = HyundaiBlue.copy(alpha = 0.3f))
-            .background(Color.White.copy(alpha = 0.92f), shape)
-            .border(1.dp, Color(0xFFDCE3EB), shape)
-            .padding(start = 8.dp, end = 20.dp, top = 8.dp, bottom = 8.dp)
+            .size(68.dp)
+            .shadow(10.dp, CircleShape, ambientColor = HyundaiBlue.copy(alpha = 0.35f), spotColor = HyundaiBlue.copy(alpha = 0.35f))
             .clearAndSetSemantics { contentDescription = description },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Canvas(Modifier.size(60.dp)) {
-            val r = size.minDimension / 2f
-            val c = center
-            drawCircle(Brush.radialGradient(listOf(Color.White, Color(0xFFE8EDF3)), center = c, radius = r), radius = r)
-            drawCircle(Color(0xFFC9D2DC), radius = r - 1.dp.toPx(), style = Stroke(width = 1.2.dp.toPx()))
+        val r = size.minDimension / 2f
+        val c = center
+        // 유리 원판: 위가 밝고 아래로 은은하게 푸른 빛
+        drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.96f), Color(0xFFE4ECF4).copy(alpha = 0.92f))), radius = r)
+        drawCircle(Brush.verticalGradient(listOf(Color.White, Color(0xFFC9D4E0))), radius = r - 0.75.dp.toPx(), style = Stroke(width = 1.5.dp.toPx()))
 
-            // 다이얼: 진행 방향이 위로 오도록 -heading만큼 돌린다.
-            rotate(-shown, pivot = c) {
-                for (i in 0 until 12) {
-                    val a = (i * 30f - 90f) * (PI.toFloat() / 180f)
-                    val outer = r * 0.86f
-                    val inner = if (i % 3 == 0) r * 0.70f else r * 0.76f
-                    drawLine(
-                        Color(0xFF9AA7B6),
-                        Offset(c.x + cos(a) * inner, c.y + sin(a) * inner),
-                        Offset(c.x + cos(a) * outer, c.y + sin(a) * outer),
-                        strokeWidth = if (i % 3 == 0) 1.6.dp.toPx() else 1.dp.toPx(),
-                        cap = StrokeCap.Round,
-                    )
-                }
-                val label = measurer.measure("N", TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ActiveRed))
-                drawText(label, topLeft = Offset(c.x - label.size.width / 2f, c.y - r * 0.52f - label.size.height / 2f))
+        rotate(-shown, pivot = c) {
+            for (i in 0 until 24) {
+                val a = (i * 15f - 90f) * (PI.toFloat() / 180f)
+                val major = i % 6 == 0
+                val outer = r * 0.84f
+                val inner = if (major) r * 0.68f else r * 0.76f
+                drawLine(
+                    Color(0xFF9FB0C3).copy(alpha = if (major) 0.95f else 0.55f),
+                    Offset(c.x + cos(a) * inner, c.y + sin(a) * inner),
+                    Offset(c.x + cos(a) * outer, c.y + sin(a) * outer),
+                    strokeWidth = if (major) 1.6.dp.toPx() else 0.9.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
             }
-
-            // 고정 화살표: 늘 위쪽 = 진행 방향
-            val arrow = Path().apply {
-                moveTo(c.x, c.y - r * 0.30f)
-                lineTo(c.x + r * 0.20f, c.y + r * 0.22f)
-                lineTo(c.x, c.y + r * 0.10f)
-                lineTo(c.x - r * 0.20f, c.y + r * 0.22f)
+            // 북쪽 바늘(빨간 삼각형)
+            val needle = Path().apply {
+                moveTo(c.x, c.y - r * 0.86f)
+                lineTo(c.x + r * 0.11f, c.y - r * 0.60f)
+                lineTo(c.x - r * 0.11f, c.y - r * 0.60f)
                 close()
             }
-            drawPath(arrow, Brush.verticalGradient(listOf(Color(0xFF1B5BA6), HyundaiBlue), startY = c.y - r * 0.3f, endY = c.y + r * 0.22f))
+            drawPath(needle, ActiveRed)
         }
-        Text(name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = HyundaiBlue)
+
+        // 고정 화살표: 늘 위쪽 = 진행 방향
+        val arrow = Path().apply {
+            moveTo(c.x, c.y - r * 0.36f)
+            lineTo(c.x + r * 0.24f, c.y + r * 0.26f)
+            lineTo(c.x, c.y + r * 0.12f)
+            lineTo(c.x - r * 0.24f, c.y + r * 0.26f)
+            close()
+        }
+        drawPath(arrow, Brush.verticalGradient(listOf(Color(0xFF2A6BB8), HyundaiBlue), startY = c.y - r * 0.36f, endY = c.y + r * 0.26f))
+        drawCircle(Color.White.copy(alpha = 0.9f), radius = r * 0.05f, center = Offset(c.x, c.y + r * 0.02f))
     }
 }

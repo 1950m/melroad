@@ -1,5 +1,11 @@
 package com.studio1950.melroad.ui
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -29,11 +36,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -46,68 +57,66 @@ import com.studio1950.melroad.integration.SignalSourceStatus
 import com.studio1950.melroad.music.MusicEvent
 import com.studio1950.melroad.ui.theme.ActiveBlue
 import com.studio1950.melroad.ui.theme.HyundaiBlue
+import com.studio1950.melroad.ui.theme.SkyBlue
 
 /**
- * '지금 연주' 패널: 위쪽 정보(여정·상태) / 가운데 선율 라인 그래픽(글자 없음) / 아래쪽 정보(진행·신호).
- * 현대 블루 바탕 위 흰 글자로 대비를 확보한다.
+ * '지금 연주' 패널: 오른쪽 위 진행 시간 / 가운데 선율 그래픽(글자 없음) / 필요할 때만 아래쪽 신호 안내.
+ * 여정 이름·재생 상태는 화면에 쓰지 않고 화면 낭독기 알림([announcement])으로만 전달한다.
+ * 바탕에는 아주 느리게 흐르는 빛을 깔아 정지 화면처럼 딱딱해 보이지 않게 한다.
  */
 @Composable
 private fun NowPlayingPanel(
     modifier: Modifier,
-    title: String,
-    status: String,
+    time: String,
+    timeDescription: String,
+    announcement: String,
     playing: Boolean,
     events: (Long, Long) -> List<MusicEvent>,
     position: () -> Long,
-    bottom: @Composable ColumnScope.() -> Unit,
+    bottom: @Composable ColumnScope.() -> Unit = {},
 ) {
     val shape = RoundedCornerShape(36.dp)
+    val reducedMotion = rememberReducedMotion()
+    val drift by rememberInfiniteTransition(label = "aurora").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(16_000, easing = LinearEasing), RepeatMode.Reverse),
+        label = "drift",
+    )
     Column(
         modifier
             .shadow(18.dp, shape, ambientColor = HyundaiBlue, spotColor = HyundaiBlue)
             .clip(shape)
             .background(Brush.linearGradient(listOf(Color(0xFF0A3F7A), HyundaiBlue, Color(0xFF001A3A))))
+            .drawBehind {
+                val d = if (reducedMotion) 0.5f else drift
+                val c1 = Offset(size.width * (0.15f + 0.7f * d), size.height * 0.18f)
+                drawCircle(Brush.radialGradient(listOf(ActiveBlue.copy(alpha = 0.20f), Color.Transparent), center = c1, radius = size.width * 0.55f), radius = size.width * 0.55f, center = c1)
+                val c2 = Offset(size.width * (0.85f - 0.6f * d), size.height * 0.92f)
+                drawCircle(Brush.radialGradient(listOf(SkyBlue.copy(alpha = 0.10f), Color.Transparent), center = c2, radius = size.width * 0.5f), radius = size.width * 0.5f, center = c2)
+            }
             .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.30f), Color.Transparent)), shape)
             .padding(horizontal = 30.dp, vertical = 26.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        // 상단 정보
-        Text(title, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.78f))
-        Text(
-            status,
-            style = MaterialTheme.typography.headlineMedium,
-            color = Color.White,
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-        )
-        // 선율 라인 그래픽
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // 보이지 않는 상태 알림(재생·일시정지·마무리 등). 글자 대신 화면 낭독기가 읽는다.
+            Box(Modifier.size(1.dp).semantics { contentDescription = announcement; liveRegion = LiveRegionMode.Polite })
+            Spacer(Modifier.weight(1f))
+            Text(
+                time,
+                style = MaterialTheme.typography.headlineSmall.copy(fontFeatureSettings = "tnum"),
+                color = Color.White.copy(alpha = 0.92f),
+                modifier = Modifier.clearAndSetSemantics { contentDescription = timeDescription },
+            )
+        }
         MelodyLines(
             events = events,
             position = position,
             playing = playing,
             modifier = Modifier.fillMaxWidth().weight(1f).heightIn(min = 160.dp),
         )
-        // 하단 정보
         bottom()
-    }
-}
-
-/** 진행 막대(흰색 계열, 어두운 패널용) */
-@Composable
-private fun PanelProgress(fraction: Float) {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(8.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(Color.White.copy(alpha = 0.18f)),
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(Brush.horizontalGradient(listOf(ActiveBlue, Color.White))),
-        )
     }
 }
 
@@ -154,23 +163,23 @@ fun RunningScreen(
                 s.sceneHeadingDeg?.let { HeadingCompass(it, Modifier.align(Alignment.TopStart).padding(22.dp)) }
             }
         }
+        val elapsed = formatClock(s.elapsedMs)
+        val simulation = stringResource(R.string.badge_simulation)
+        val announcement = if (s.isSimulation) "$status, $simulation" else status
         val panel = @Composable { mod: Modifier ->
-            NowPlayingPanel(mod, s.title, status, playing, events, position) {
-                val elapsed = formatClock(s.elapsedMs)
-                val demo = s.source == TripSource.DEMO && s.durationMs > 0
-                if (demo) PanelProgress(s.elapsedMs.toFloat() / s.durationMs)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        if (demo) "$elapsed / ${formatClock(s.durationMs)}" else elapsed,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                    )
-                    if (s.source == TripSource.LIVE) {
-                        Spacer(Modifier.weight(1f))
+            NowPlayingPanel(
+                mod,
+                time = elapsed,
+                timeDescription = stringResource(R.string.elapsed_desc, elapsed),
+                announcement = announcement,
+                playing = playing,
+                events = events,
+                position = position,
+            ) {
+                if (s.source == TripSource.LIVE) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         PanelChip(stringResource(R.string.signal_speed))
                     }
-                }
-                if (s.source == TripSource.LIVE) {
                     when (s.signalStatus) {
                         SignalSourceStatus.SIGNAL_LOST -> Text(stringResource(R.string.signal_lost), style = MaterialTheme.typography.bodyMedium, color = Color.White)
                         SignalSourceStatus.ERROR -> Text(stringResource(R.string.signal_error), style = MaterialTheme.typography.bodyMedium, color = Color.White)
@@ -238,23 +247,19 @@ fun FinishedScreen(
 
     BoxWithConstraints(Modifier.fillMaxSize().padding(28.dp)) {
         val wide = maxWidth > 840.dp
-        val simulationLabel = stringResource(R.string.badge_simulation)
+        val statusText = stringResource(if (replaying) R.string.finished_replaying else R.string.finished_title)
+        val shownTime = formatClock(if (replaying) s.elapsedMs else length)
+        val lengthText = stringResource(R.string.finished_length, formatClock(length))
         val panel = @Composable { mod: Modifier ->
             NowPlayingPanel(
                 mod,
-                title = s.title + if (s.isSimulation && !s.title.contains(simulationLabel)) " · $simulationLabel" else "",
-                status = stringResource(if (replaying) R.string.finished_replaying else R.string.finished_title),
+                time = shownTime,
+                timeDescription = if (replaying) stringResource(R.string.elapsed_desc, shownTime) else lengthText,
+                announcement = "$statusText, $lengthText",
                 playing = s.phase == SessionPhase.MEMORY_PLAYING,
                 events = events,
                 position = position,
-            ) {
-                if (replaying && length > 0) PanelProgress(s.elapsedMs.toFloat() / length)
-                Text(
-                    if (replaying) "${formatClock(s.elapsedMs)} / ${formatClock(length)}" else stringResource(R.string.finished_length, formatClock(length)),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Color.White,
-                )
-            }
+            )
         }
         val actions = @Composable {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
