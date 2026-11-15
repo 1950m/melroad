@@ -20,7 +20,7 @@
 | 명령 | 결과 |
 |---|---|
 | `./gradlew :core-music:test` | **통과** 25/25 (DeterminismTest 4, FixtureMusicTest 14, SignalNormalizerTest 7) |
-| `./gradlew test` (app 포함) | **통과** — OfflineRenderTest 1/1, PleosApiProbeTest 1/1 (2026-11-15) |
+| `./gradlew test` (app 포함) | **통과** — OfflineRenderTest 1/1(오케스트라 샘플 사용), PleosApiProbeTest 1/1 (2026-11-15 18:17) |
 | `./gradlew :app:assembleDebug` | **성공** (경고: API 35 SDK에서 `CarPropertyManager.registerCallback` 사용 중단 표시. 실행 대상 API 34에서는 정상 API) |
 
 ### 요구서 TC 대응
@@ -31,7 +31,7 @@
 | TC-04 | 같은 fixture+seed 3회 해시 일치, pump 간격과 무관 | 통과(유닛) |
 | TC-06 | 위치 60초 null → SPEED_ONLY, 가짜 커브·오르막 없음 | 통과(유닛) |
 | 장기 여정 | 30분 해안도로: 구간 4종 이상, 조바꿈 3회 이상, 4마디 선율 60% 이상 서로 다름 | 통과(유닛) |
-| 음량 | 오프라인 렌더 peak 0.47~0.67, RMS 약 0.10, 클리핑 없음 | 통과(유닛) |
+| 음량 | 오프라인 렌더 peak 0.71~0.85, RMS 약 0.12, 클리핑 없음 | 통과(유닛) |
 | TC-05 | 권한 거부 시 LIVE 자동 시작 금지 | 코드 구현, **기기 미검증** |
 | TC-07 | 주행 중 제한 | 코드 구현, **미검증**(Pleos AVD 없음) |
 | TC-08 | 통화·안내 포커스 | 코드 구현, **미검증** |
@@ -50,6 +50,8 @@
 | 우리의 음악 | 날짜·길이·시뮬레이션 구분 표시, 재생/삭제 버튼에 TalkBack 설명 |
 | 다시 듣기 | 저장된 이벤트 그대로 재생(0:09 / 0:56), 세션 active |
 | 크래시 로그 | 멜로드 관련 0건 |
+
+| 새 첫 화면(아이콘 버튼·새 심볼) | **미확인** — `INSTALL_FAILED_INSUFFICIENT_STORAGE`(에뮬레이터 내부 저장공간 부족). 저장공간 확보 후 재설치 필요 |
 
 ## 4. API 상태
 
