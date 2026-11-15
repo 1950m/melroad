@@ -41,6 +41,8 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
     var library: SampleLibrary? = null
 
     fun trigger(event: MusicEvent) {
+        // 오케스트라 편성에서는 팝 드럼(킥·스네어·하이햇)과 그에 맞춘 펌핑을 쓰지 않는다. 심벌 스웰 자리만 팀파니 롤로 연주한다.
+        if (library != null && event.instrument == Instrument.PERC && event.pitch != 49) return
         val v = voices.firstOrNull { !it.active }
             ?: voices.filter { it.releasing }.minByOrNull { it.startSerial }
             ?: voices.minBy { it.startSerial }
@@ -343,7 +345,8 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
 
             // (세기 배율, 어택 초, 릴리스 초, 좌우 위치)
             val (gain, attack, release, pan) = when (bank) {
-                "piano" -> if (e.instrument == Instrument.EPIANO) Quad(0.62f, 0.002, 0.30, -0.08f) else Quad(0.95f, 0.002, 0.28, ((e.pitch - 64) / 60f).coerceIn(-0.25f, 0.25f))
+                // 피아노는 페달을 밟은 듯 손을 뗀 뒤에도 잠시 울린다(반주가 조금 더 길게)
+                "piano" -> if (e.instrument == Instrument.EPIANO) Quad(0.58f, 0.002, 1.0, -0.08f) else Quad(0.95f, 0.002, 0.7, ((e.pitch - 64) / 60f).coerceIn(-0.25f, 0.25f))
                 "harp" -> Quad(0.85f, 0.002, 1.1, -0.28f)
                 "violins" -> Quad(if (e.instrument == Instrument.PAD) 0.42f else 0.62f, 0.06, 0.55, -0.35f)
                 "violas" -> Quad(if (e.instrument == Instrument.PAD) 0.42f else 0.58f, 0.06, 0.55, 0.08f)
@@ -359,7 +362,7 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
             releaseMul = exp(-1.0 / (release * sr)).toFloat()
             // 여린 음일수록 조금 어둡게(실제 악기처럼)
             lpCoef = onePole(1800.0 + 9000.0 * (e.velocity / 127.0) * bright)
-            send = 0.06f
+            send = 0f // 실제 악기 녹음에는 코러스를 걸지 않는다(전자음처럼 들리는 원인)
             val angle = (pan + 1f) * (PI / 4).toFloat()
             gainL = cos(angle)
             gainR = sin(angle)
@@ -637,18 +640,24 @@ internal class StereoChorus(private val sampleRate: Int) {
 /** Freeverb 구조의 스테레오 리버브(콤 8 + 올패스 4). 길고 부드러운 잔향으로 공간감을 준다. */
 internal class StereoReverb(sampleRate: Int) {
     private val scale = sampleRate / 44_100.0
-    private val combsL = intArrayOf(1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617).map { Comb((it * scale).toInt()) }
-    private val combsR = intArrayOf(1139, 1211, 1300, 1379, 1445, 1514, 1580, 1640).map { Comb((it * scale).toInt()) }
+    private val combsL = intArrayOf(1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617).map { Comb((it * scale * HALL).toInt()) }
+    private val combsR = intArrayOf(1139, 1211, 1300, 1379, 1445, 1514, 1580, 1640).map { Comb((it * scale * HALL).toInt()) }
     private val apL = intArrayOf(556, 441, 341, 225).map { AllPass((it * scale).toInt()) }
     private val apR = intArrayOf(579, 464, 364, 248).map { AllPass((it * scale).toInt()) }
 
+    // 프리딜레이: 직접음과 잔향 사이에 짧은 틈을 둬 소리가 뭉개지지 않고 넓은 홀처럼 들리게 한다.
+    private val pre = FloatArray((0.024 * sampleRate).toInt().coerceAtLeast(1))
+    private var preIdx = 0
+
     fun process(left: FloatArray, right: FloatArray, count: Int, wet: Float) {
         for (i in 0 until count) {
-            val input = (left[i] + right[i]) * 0.015f
+            val delayed = pre[preIdx]
+            pre[preIdx] = (left[i] + right[i]) * 0.015f
+            preIdx = (preIdx + 1) % pre.size
             var l = 0f
             var r = 0f
-            for (c in combsL) l += c.process(input)
-            for (c in combsR) r += c.process(input)
+            for (c in combsL) l += c.process(delayed)
+            for (c in combsR) r += c.process(delayed)
             for (a in apL) l = a.process(l)
             for (a in apR) r = a.process(r)
             left[i] += l * wet
@@ -662,8 +671,8 @@ internal class StereoReverb(sampleRate: Int) {
         private var store = 0f
         fun process(x: Float): Float {
             val y = buf[idx]
-            store = y * 0.8f + store * 0.2f // 약한 고역 감쇠(부드럽지만 답답하지 않은 잔향)
-            buf[idx] = x + store * 0.88f
+            store = y * 0.62f + store * 0.38f // 고역을 더 감쇠: 금속성 울림 대신 어둡고 부드러운 홀 잔향
+            buf[idx] = x + store * 0.90f
             idx = (idx + 1) % buf.size
             return y
         }
@@ -679,5 +688,13 @@ internal class StereoReverb(sampleRate: Int) {
             idx = (idx + 1) % buf.size
             return y
         }
+    }
+
+    companion object {
+        /** 콤 지연을 늘려 방 크기를 키운다(오케스트라 홀). */
+        private const val HALL = 1.25
+
+        /** 앱과 오프라인 렌더가 함께 쓰는 잔향 비율 */
+        const val WET = 0.40f
     }
 }

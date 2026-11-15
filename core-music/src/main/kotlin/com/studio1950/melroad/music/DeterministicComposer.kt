@@ -494,35 +494,18 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
                     // 짝수 번째 순환의 주제 구간은 기타 핑거피킹으로 반주 색을 바꾼다
                     addGuitarPicking(out, bar, start, length, degree, 34)
                 } else when (density) {
-                    0, 1 -> {
-                        if (length >= 8) {
-                            addEpChord(out, bar, 0, 4, degree, 36)
-                            addEpChord(out, bar, 4, 4, degree, 32)
-                        } else {
-                            addEpChord(out, bar, start, length, degree, 36)
-                        }
-                    }
-                    2 -> if (length >= 8) {
-                        addEpChord(out, bar, 0, 3, degree, 36)
-                        addEpChord(out, bar, 3, 3, degree, 32)
-                        addEpChord(out, bar, 6, 2, degree, 30)
-                    } else {
-                        addEpChord(out, bar, start, length, degree, 34)
-                    }
+                    // 주제: 피아노 왼손이 화음을 풀어 흐르듯 연주(느릴 땐 4분, 빨라지면 8분). 짧게 끊는 화음 대신 페달로 이어진다.
+                    0, 1 -> addPianoFlow(out, bar, start, length, degree, 34, stepEighths = 2)
+                    2 -> addPianoFlow(out, bar, start, length, degree, 33, stepEighths = 1)
                     else -> {
-                        addEpChord(out, bar, start, length, degree, 32)
-                        addArpeggio(out, bar, start, length, degree, eighths = true, velocity = 28, rng = rng)
+                        addPianoFlow(out, bar, start, length, degree, 31, stepEighths = 1)
+                        addArpeggio(out, bar, start, length, degree, eighths = true, velocity = 26, rng = rng)
                     }
                 }
                 SectionType.CHORUS -> {
-                    // 당김음 화음(1, 2&, 4) + 밀도가 높으면 흐르는 분산화음
-                    if (length >= 8) {
-                        addEpChord(out, bar, 0, 3, degree, 34)
-                        addEpChord(out, bar, 3, 3, degree, 30)
-                        addEpChord(out, bar, 6, 2, degree, 30)
-                    } else {
-                        addEpChord(out, bar, start, length, degree, 32)
-                    }
+                    // 후렴: 첫 박에 화음을 굴려 넓게 펼친 뒤 피아노 분산화음이 4분으로 받치고, 밀도가 높으면 하프가 8분으로 흐른다
+                    addEpChord(out, bar, start, minOf(length, 2), degree, 34)
+                    addPianoFlow(out, bar, start + 2, length - 2, degree, 31, stepEighths = 2)
                     if (density >= 2) addArpeggio(out, bar, start, length, degree, eighths = true, velocity = 26, rng = rng)
                 }
                 SectionType.INTERLUDE -> {
@@ -546,8 +529,28 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
             .map { Chords.fold(it, lo, hi) }
             .distinct()
             .sorted()
-        // 손으로 누르듯 아래 음부터 아주 조금씩 늦게(음마다 9ms) 울려 화음이 부드럽게 펼쳐지게 한다.
-        steps.forEachIndexed { i, s -> note(out, bar, startEighth, lengthEighths, Instrument.EPIANO, s, velocity, offsetMs = i * 9L) }
+        // 손으로 굴리듯 아래 음부터 조금씩 늦게(음마다 22ms) 울려 화음이 부드럽게 펼쳐지게 한다.
+        steps.forEachIndexed { i, s -> note(out, bar, startEighth, lengthEighths, Instrument.EPIANO, s, velocity, offsetMs = i * 22L) }
+    }
+
+    /**
+     * 피아노 왼손 분산화음: 낮은 근음 → 5음 → 10음(3음+옥타브) → 5음 → 9음(또는 옥타브) … 순서로 풀어 친다.
+     * 각 음은 화음이 끝날 때까지 이어 울려(페달) 화성이 부드럽게 겹친다. 박 머리는 조금 또렷하게.
+     */
+    private fun addPianoFlow(out: MutableList<MusicEvent>, bar: Int, startEighth: Int, lengthEighths: Int, degree: Int, velocity: Int, stepEighths: Int) {
+        if (lengthEighths <= 0) return
+        val r = Chords.fold(degree, -10, -4)
+        val top = if (Chords.allowsNinth(degree)) r + 8 else r + 7
+        val shape = intArrayOf(r, r + 4, r + 9, r + 4, top, r + 4, r + 9, r + 4)
+        var i = 0
+        var e = startEighth
+        val end = startEighth + lengthEighths
+        while (e < end) {
+            val accent = if (e % 4 == 0) 4 else 0
+            note(out, bar, e, end - e, Instrument.EPIANO, shape[i % shape.size], velocity + accent - (if (i == 0) 0 else 5))
+            i++
+            e += stepEighths
+        }
     }
 
     /** 하프처럼 흐르는 분산화음. 위로 올랐다가 내려온다. */
@@ -756,9 +759,12 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
             } else {
                 note(out, bar, eighth, length, instrument, step, velocity, expression)
             }
-            // 후렴: 긴 음을 현악이 한 옥타브 아래에서 함께 노래한다
+            // 후렴: 긴 음을 현악이 한 옥타브 아래에서 함께 노래하고, 피아노도 옥타브로 겹쳐 선율을 두텁게 한다
             if (section == SectionType.CHORUS && length >= 3) {
                 note(out, bar, eighth, length, Instrument.STRINGS, step - 7, (velocity - 18).coerceAtLeast(24), expression)
+            }
+            if (section == SectionType.CHORUS && instrument == Instrument.PIANO) {
+                note(out, bar, eighth, length, Instrument.EPIANO, step - 7, (velocity - 16).coerceAtLeast(26), expression)
             }
             prev = step
         }

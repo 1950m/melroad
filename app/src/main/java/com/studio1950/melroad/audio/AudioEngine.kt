@@ -198,7 +198,7 @@ class AudioEngine(private val sampleRate: Int = 44_100) {
                 }
 
                 chorus.process(busL, busR, left, right, BLOCK)
-                reverb.process(left, right, BLOCK, WET)
+                reverb.process(left, right, BLOCK, StereoReverb.WET)
 
                 val duckFactor = if (ducked) DUCK_LEVEL else 1f
                 val goal = targetGain * duckFactor
@@ -237,7 +237,6 @@ class AudioEngine(private val sampleRate: Int = 44_100) {
     companion object {
         private const val TAG = "MelroadAudio"
         private const val BLOCK = 512
-        private const val WET = 0.32f
         private const val MASTER = 1.4f
         private const val DUCK_LEVEL = 0.3f
     }

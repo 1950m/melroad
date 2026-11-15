@@ -75,7 +75,7 @@ class OfflineRenderTest {
             }
             voices.render(left, right, busL, busR, pos, n)
             chorus.process(busL, busR, left, right, n)
-            reverb.process(left, right, n, 0.32f)
+            reverb.process(left, right, n, StereoReverb.WET)
             for (i in 0 until n) {
                 left[i] *= 1.4f
                 right[i] *= 1.4f
