@@ -44,6 +44,7 @@ class MelroadViewModel(app: Application) : AndroidViewModel(app) {
 
     fun visibleEvents(fromMs: Long, toMs: Long) = session.visibleEvents(fromMs, toMs)
     fun position(): Long = session.positionMs
+    fun roadSamples(fromMs: Long, toMs: Long) = session.roadSamples(fromMs, toMs)
 
     fun recheckCapability() = session.checkLiveCapability()
     fun startDemo(id: String) = session.startDemo(id)

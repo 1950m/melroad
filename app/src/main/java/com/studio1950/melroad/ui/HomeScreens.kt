@@ -55,6 +55,7 @@ fun SceneCard(
     curve: Float,
     climb: Float = 0f,
     playing: Boolean = false,
+    road: RoadFeed? = null,
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     val shape = RoundedCornerShape(40.dp)
@@ -64,7 +65,7 @@ fun SceneCard(
             .clip(shape)
             .border(1.dp, Color.White, shape),
     ) {
-        DriveScene(speedKmh, curve, climb, playing, Modifier.fillMaxSize())
+        DriveScene(speedKmh, curve, climb, playing, Modifier.fillMaxSize(), road = road)
         overlay()
     }
 }
@@ -72,7 +73,7 @@ fun SceneCard(
 /**
  * S01 첫 화면. 해질녘 해안도로 장면을 화면 가득 깔고 글자 버튼 없이 아이콘으로만 둔다.
  * - 왼쪽 위: 멜로드 심볼과 이름 / 오른쪽 위: 정보(i)
- * - 아래 가운데: 숨 쉬는 빛을 두른 큰 재생 버튼(여행 시작) / 오른쪽 아래: 뮤직박스(재생 목록) 버튼
+ * - 정중앙: 숨 쉬는 빛을 두른 큰 시작 버튼(흐르는 선율) / 오른쪽 아래: 뮤직박스(재생 목록) 버튼
  * 아이콘 버튼은 화면 낭독기가 '여행 시작', '뮤직박스', '정보'로 읽는다.
  */
 @Composable
@@ -81,14 +82,14 @@ fun HomeScreen(onStartTrip: () -> Unit, onOurMusic: () -> Unit, onInfo: () -> Un
         val wide = maxWidth > 840.dp
         val playSize = if (wide) 156.dp else 128.dp
         val sideSize = if (wide) 100.dp else 84.dp
-        // 해질녘 해안도로 배경(자체 렌더링 이미지) + 자동차·빛 움직임
+        // 해질녘 해안도로 배경 이미지 + 해·윤슬 움직임
         HomeScene(Modifier.fillMaxSize())
         MelroadBrand(
             name = stringResource(R.string.app_name),
             wordmark = stringResource(R.string.brand),
             modifier = Modifier.align(Alignment.TopStart).padding(start = 40.dp, top = 36.dp),
             markSize = if (wide) 68.dp else 56.dp,
-            textColor = Color.White,
+            textColor = HyundaiBlue,
         )
         RoundIconButton(
             RoundIcon.INFO,
@@ -97,15 +98,13 @@ fun HomeScreen(onStartTrip: () -> Unit, onOurMusic: () -> Unit, onInfo: () -> Un
             onClick = onInfo,
             modifier = Modifier.align(Alignment.TopEnd).padding(end = 40.dp, top = 32.dp),
         )
-        // 아래 가운데: 여행 시작(재생). 숨 쉬는 빛을 두른 가장 큰 버튼
+        // 화면 정중앙: 여행 시작('흐르는 선율'). 숨 쉬는 빛을 두른 가장 큰 버튼
         Box(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = if (wide) 40.dp else 28.dp),
+            Modifier.align(Alignment.Center),
             contentAlignment = Alignment.Center,
         ) {
             BreathingGlow(playSize * 1.7f)
-            RoundIconButton(RoundIcon.PLAY, stringResource(R.string.action_start_trip), playSize, onStartTrip, primary = true)
+            RoundIconButton(RoundIcon.MELODY, stringResource(R.string.action_start_trip), playSize, onStartTrip, primary = true)
         }
         // 오른쪽 아래: 뮤직박스(재생 목록)
         RoundIconButton(

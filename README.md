@@ -11,7 +11,7 @@
 | 모드 | 입력 | 표시 |
 |---|---|---|
 | LIVE | 실제 차량 신호: AAOS 차량 속도 + Pleos FusedLocation(위치·진행 방향·고도), 확인된 것만 연결 | 시작 화면에 연결될 신호 표시, 속도만이면 "차량 속도 신호" 표시 |
-| DEMO | 사전 제작 합성 주행 데이터(제주 해안도로 약 30분 / 언덕길 약 20분 / 도심 약 15분) | 시작 화면의 "시뮬레이션" 구역·저장된 곡 제목·화면 낭독기 안내에 "시뮬레이션" 표기(주행 화면에는 글자 표시 없음) |
+| DEMO | 사전 제작 합성 주행 데이터(화면 표기 테스트 1·2·3 — 해안도로 흐름 약 30분 / 언덕길 약 20분 / 도심 약 15분) | 시작 화면의 "시뮬레이션" 구역·저장된 곡 제목·화면 낭독기 안내에 "시뮬레이션" 표기(주행 화면에는 글자 표시 없음) |
 | MEMORY | 저장된 MusicEvent 타임라인을 그대로 재생(새로 작곡하지 않음) | 실제 주행/시뮬레이션 구분 표시 |
 
 실제 신호가 없거나 권한이 거절되면 LIVE를 시작하지 않고, DEMO로 자동 전환하지 않습니다.
@@ -28,6 +28,7 @@ app/                 Android 앱 (Kotlin, Jetpack Compose)
     car/             CarPropertyManager(PERF_VEHICLE_SPEED), CarUxRestrictionsManager 어댑터
 core-music/          순수 Kotlin 결정론적 작곡 엔진 (Android 의존성 없음)
 sampledata/          시뮬레이션 데이터 설명
+docs/requirements/   상세개발요구서 v2
 ```
 
 음악 매핑: 속도 → 반주 밀도(음량·템포는 올리지 않음), 진행 방향 변화 → 다음 악절 화성·선율 방향, 검증된 고도 변화 → 음역·패드 색채.
@@ -38,9 +39,19 @@ sampledata/          시뮬레이션 데이터 설명
 ## 빌드·실행
 
 - Android Studio에서 이 폴더를 열고 Gradle Sync → `app` 실행
-- 단위 테스트: `./gradlew :core-music:test`
+- 앱에서: 가운데 시작 버튼 → 시뮬레이션 '테스트 1~3' 중 선택 → 종료 → 뮤직박스에 저장 → 다시 듣기
+- 단위·스크린샷 테스트: `./gradlew test`
 - 버전: AGP 8.7.3 / Gradle 8.9 / Kotlin 2.0.21 / compileSdk 35 · targetSdk 34 / minSdk 28
-- 대상 에뮬레이터: Pleos Connect v2.1.0 (Automotive, API 34)
+
+### 테스트 환경 및 필요한 설정
+
+- 개발·테스트 에뮬레이터: Android Studio Pixel Tablet (API 35, 2560×1600, 320dpi)
+- 대상 플랫폼: Pleos Connect v2.1.0 (Android Automotive OS, API 34)
+- 필요한 설정: 없음(로그인·서버·네트워크 사용 없음). 실제 주행(LIVE)은 차량 속도 권한과 Pleos 위치 권한을 허용해야 한다.
+
+### APK
+
+- GitHub Releases에 등록 예정(링크는 등록 후 이 항목에 적는다).
 
 ## 권한
 
@@ -80,7 +91,7 @@ sampledata/          시뮬레이션 데이터 설명
 
 작곡은 규칙 기반·결정론적이며 생성형 AI를 쓰지 않는다.
 
-첫 화면 배경(`res/drawable-nodpi/home_scene.webp`)은 외부 이미지 없이 `tools/render_home_scene.py`로 직접 렌더링한 자체 제작물이다.
+첫 화면 배경(`res/drawable-nodpi/home_scene.webp`)은 개발자가 제공한 해질녘 해안도로 이미지다.
 
 ## 한계
 

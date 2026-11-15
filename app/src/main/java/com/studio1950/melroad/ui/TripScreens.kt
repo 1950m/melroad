@@ -54,6 +54,7 @@ import com.studio1950.melroad.domain.SessionState
 import com.studio1950.melroad.domain.TripSource
 import com.studio1950.melroad.integration.DrivingUxState
 import com.studio1950.melroad.integration.SignalSourceStatus
+import com.studio1950.melroad.music.DriveSample
 import com.studio1950.melroad.music.MusicEvent
 import com.studio1950.melroad.ui.theme.ActiveBlue
 import com.studio1950.melroad.ui.theme.HyundaiBlue
@@ -143,11 +144,13 @@ fun RunningScreen(
     s: SessionState,
     events: (Long, Long) -> List<MusicEvent>,
     position: () -> Long,
+    roadSamples: (Long, Long) -> List<DriveSample>,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onFinish: () -> Unit,
 ) {
     val playing = s.phase != SessionPhase.PAUSED
+    val roadFeed = remember(roadSamples, position) { RoadFeed(roadSamples, position) }
     val status = stringResource(
         when (s.phase) {
             SessionPhase.PAUSED -> R.string.running_paused
@@ -158,7 +161,7 @@ fun RunningScreen(
     BoxWithConstraints(Modifier.fillMaxSize().padding(28.dp)) {
         val wide = maxWidth > 840.dp
         val scene = @Composable { mod: Modifier ->
-            SceneCard(mod, s.sceneSpeedKmh, s.sceneCurve, s.sceneClimb, playing) {
+            SceneCard(mod, s.sceneSpeedKmh, s.sceneCurve, s.sceneClimb, playing, road = roadFeed) {
                 // 방향 신호가 있을 때만 방위를 보인다(속도만 있는 실제 주행에서는 표시하지 않음).
                 s.sceneHeadingDeg?.let { HeadingCompass(it, Modifier.align(Alignment.TopStart).padding(22.dp)) }
             }

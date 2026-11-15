@@ -5,7 +5,8 @@ package com.studio1950.melroad.music
  *
  * 모두 장면(구간) 규칙으로 만든 합성 데이터이며 실제 도로·실시간 센서 기록이 아니다.
  * 실제 여정처럼 15~30분 길이로 만들어 긴 주행에서 음악이 어떻게 변하는지 확인할 수 있게 했다.
- * "제주 해안도로"는 해안도로의 완만한 굽이·정차·언덕 흐름을 본뜬 가상 경로로, 실제 도로 형상과 일치하지 않는다.
+ * 화면에는 "테스트 1~3"으로만 표시한다. 테스트 1(coast)은 해안도로의 완만한 굽이·정차·언덕 흐름을 본뜬 가상 경로로,
+ * 실제 도로 형상과 일치하지 않는다. 테스트 2(hill)는 언덕길, 테스트 3(city)은 도심 흐름이다.
  * 정제 파이프라인 검증을 위해 일부 구간에 위치 신호 끊김과 GPS 튐을 의도적으로 넣었다.
  */
 data class DriveFixture(
@@ -24,7 +25,7 @@ object DriveFixtures {
     val COAST: DriveFixture by lazy {
         build(
             id = "coast",
-            title = "제주 해안도로",
+            title = "테스트 1",
             description = "해안 굽이길 · 정차 · 언덕",
             seed = 0x4A454A55L, // "JEJU"
             startLat = 33.4640, startLon = 126.3100, startAltM = 12.0, startBearing = 245.0,
@@ -51,7 +52,7 @@ object DriveFixtures {
     val HILL: DriveFixture by lazy {
         build(
             id = "hill",
-            title = "언덕길",
+            title = "테스트 2",
             description = "오르막 · 급한 굽이 · 내리막",
             seed = 0x48494C4CL, // "HILL"
             startLat = 33.3600, startLon = 126.4600, startAltM = 300.0, startBearing = 20.0,
@@ -73,7 +74,7 @@ object DriveFixtures {
     val CITY: DriveFixture by lazy {
         build(
             id = "city",
-            title = "도심",
+            title = "테스트 3",
             description = "신호 대기 · 출발 · 좌우회전",
             seed = 0x43495459L, // "CITY"
             startLat = 33.4990, startLon = 126.5310, startAltM = 30.0, startBearing = 90.0,

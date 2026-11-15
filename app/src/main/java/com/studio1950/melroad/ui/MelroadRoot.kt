@@ -97,6 +97,7 @@ fun MelroadRoot(vm: MelroadViewModel) {
                         s = s,
                         events = vm::visibleEvents,
                         position = vm::position,
+                        roadSamples = vm::roadSamples,
                         onPause = vm::pause,
                         onResume = vm::resume,
                         onFinish = vm::finishTrip,

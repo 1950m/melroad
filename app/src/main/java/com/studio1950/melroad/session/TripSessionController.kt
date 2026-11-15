@@ -19,6 +19,7 @@ import com.studio1950.melroad.integration.VehicleSignalSource
 import com.studio1950.melroad.music.CompositionDriver
 import com.studio1950.melroad.music.DeterministicComposer
 import com.studio1950.melroad.music.DriveFixture
+import com.studio1950.melroad.music.DriveSample
 import com.studio1950.melroad.music.DriveFixtures
 import com.studio1950.melroad.music.MusicEvent
 import com.studio1950.melroad.music.SampleFeatureProvider
@@ -78,6 +79,9 @@ class TripSessionController(
     }
 
     val positionMs: Long get() = engine.playheadMs
+
+    /** 주행 화면의 앞길 그림용 원본 신호(음악과 같은 시간축). 화면 표시에만 쓰고 저장하지 않는다. */
+    fun roadSamples(fromMs: Long, toMs: Long): List<DriveSample> = source?.samplesBetween(fromMs, toMs).orEmpty()
 
     /**
      * 화면의 선율 그래픽용: [fromMs, toMs] 근처에서 시작한 이벤트(진행 중인 여행이면 기록 중인 목록,

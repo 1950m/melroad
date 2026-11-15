@@ -113,7 +113,7 @@
     <string name="msg_memory_broken">불러오기 실패</string>
     <string name="msg_all_deleted">모두 삭제됨</string>
 
-    <string name="title_demo_trip">%1$s (시뮬레이션)</string>
+    <string name="title_demo_trip">%1$s</string>
     <string name="title_live_trip">%1$s 실제 주행</string>
     <string name="elapsed_desc">진행 시간 %1$s</string>
     <string name="compass_desc">진행 방향 %1$s쪽</string>

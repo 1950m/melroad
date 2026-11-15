@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
@@ -46,8 +47,11 @@ import androidx.compose.ui.unit.dp
 import com.studio1950.melroad.ui.theme.ActiveBlue
 import com.studio1950.melroad.ui.theme.HyundaiBlue
 import com.studio1950.melroad.ui.theme.HyundaiBlueLight
+import kotlin.math.PI
+import kotlin.math.pow
+import kotlin.math.sin
 
-enum class RoundIcon { PLAY, PLAYLIST, INFO }
+enum class RoundIcon { PLAY, MELODY, PLAYLIST, INFO }
 
 /**
  * 글자 없는 원형 아이콘 버튼. 화면에는 아이콘만 보이고, 화면 낭독기는 [description]을 '버튼'으로 읽는다.
@@ -94,6 +98,10 @@ fun RoundIconButton(
         contentAlignment = Alignment.Center,
     ) {
         val tint = if (primary) Color.White else HyundaiBlue
+        if (icon == RoundIcon.MELODY) {
+            FlowingMelody(tint)
+            return@Box
+        }
         Canvas(Modifier.fillMaxSize()) {
             val s = this.size.minDimension
             fun p(x: Float, y: Float) = Offset(x * s, y * s)
@@ -109,31 +117,93 @@ fun RoundIconButton(
                     drawPath(tri, tint)
                     drawPath(tri, tint, style = Stroke(width = s * 0.05f, join = StrokeJoin.Round))
                 }
+                RoundIcon.MELODY -> Unit
                 RoundIcon.PLAYLIST -> {
-                    val w = s * 0.055f
-                    drawLine(tint, p(0.27f, 0.34f), p(0.70f, 0.34f), strokeWidth = w, cap = StrokeCap.Round)
-                    drawLine(tint, p(0.27f, 0.48f), p(0.70f, 0.48f), strokeWidth = w, cap = StrokeCap.Round)
-                    drawLine(tint, p(0.27f, 0.62f), p(0.50f, 0.62f), strokeWidth = w, cap = StrokeCap.Round)
+                    // 뮤직박스: 가는 세 줄(저장된 곡 목록)과 작은 재생 표시. 모든 아이콘을 같은 남색·같은 굵기로 맞춘다.
+                    val w = s * 0.034f
+                    drawLine(tint, p(0.28f, 0.36f), p(0.72f, 0.36f), strokeWidth = w, cap = StrokeCap.Round)
+                    drawLine(tint, p(0.28f, 0.50f), p(0.72f, 0.50f), strokeWidth = w, cap = StrokeCap.Round)
+                    drawLine(tint, p(0.28f, 0.64f), p(0.50f, 0.64f), strokeWidth = w, cap = StrokeCap.Round)
                     val tri = Path().apply {
-                        moveTo(p(0.59f, 0.56f).x, p(0.59f, 0.56f).y)
-                        lineTo(p(0.77f, 0.665f).x, p(0.77f, 0.665f).y)
-                        lineTo(p(0.59f, 0.77f).x, p(0.59f, 0.77f).y)
+                        moveTo(p(0.60f, 0.585f).x, p(0.60f, 0.585f).y)
+                        lineTo(p(0.735f, 0.665f).x, p(0.735f, 0.665f).y)
+                        lineTo(p(0.60f, 0.745f).x, p(0.60f, 0.745f).y)
                         close()
                     }
-                    drawPath(tri, ActiveBlue)
-                    drawPath(tri, ActiveBlue, style = Stroke(width = s * 0.03f, join = StrokeJoin.Round))
+                    drawPath(tri, tint)
+                    drawPath(tri, tint, style = Stroke(width = s * 0.02f, join = StrokeJoin.Round))
                 }
                 RoundIcon.INFO -> {
-                    drawCircle(tint, radius = s * 0.055f, center = p(0.5f, 0.31f))
+                    drawCircle(tint, radius = s * 0.042f, center = p(0.5f, 0.32f))
                     drawRoundRect(
                         tint,
-                        topLeft = p(0.455f, 0.43f),
-                        size = Size(s * 0.09f, s * 0.30f),
-                        cornerRadius = CornerRadius(s * 0.045f),
+                        topLeft = p(0.467f, 0.43f),
+                        size = Size(s * 0.066f, s * 0.28f),
+                        cornerRadius = CornerRadius(s * 0.033f),
                     )
                 }
             }
         }
+    }
+}
+
+/**
+ * '흐르는 선율' 아이콘: 가는 선 세 가닥이 서로 조금씩 엇갈리며 왼쪽에서 오른쪽으로 천천히 흘러간다.
+ * 양 끝은 한 점으로 모이며 투명해져 선이 끊긴 느낌 없이 나타나고 사라진다. 물결의 높이도 아주 천천히 숨 쉰다.
+ * 애니메이션 끄기 설정이면 멈춘 모양으로 그린다. 멜로드 심볼·런처 아이콘도 같은 세 가닥(멈춘 모양)이다.
+ */
+@Composable
+private fun FlowingMelody(tint: Color) {
+    val reducedMotion = rememberReducedMotion()
+    val phase by rememberInfiniteTransition(label = "melody").animateFloat(
+        initialValue = 0f,
+        targetValue = 2f * PI.toFloat(),
+        animationSpec = infiniteRepeatable(tween(3_600, easing = LinearEasing)),
+        label = "phase",
+    )
+    Canvas(Modifier.fillMaxSize()) {
+        drawMelodyStrands(size.minDimension, if (reducedMotion) MELODY_REST_PHASE else phase, tint)
+    }
+}
+
+/** 멈춘 모양에 쓰는 위상(심볼·런처 아이콘·애니메이션 끄기). */
+internal const val MELODY_REST_PHASE = 0.4f
+
+/** 가닥별 (진폭, 굵기, 불투명도, 위상 지연) — 크기 s 기준 비율 */
+private val MELODY_STRANDS = listOf(
+    floatArrayOf(0.095f, 0.020f, 1.00f, 0.0f),
+    floatArrayOf(0.070f, 0.012f, 0.70f, 0.9f),
+    floatArrayOf(0.050f, 0.009f, 0.45f, 1.8f),
+)
+
+/** 세 가닥 선율의 t(0..1) 위치 높이(크기 s 기준 비율, 0.5가 가운데). 양 끝은 진폭 0으로 모인다. */
+internal fun melodyStrandY(strand: Int, t: Float, phase: Float, ampScale: Float = 1f): Float {
+    val st = MELODY_STRANDS[strand]
+    val breathe = 0.88f + 0.12f * sin(phase)
+    val env = sin(PI.toFloat() * t).let { if (it > 0f) it.pow(0.9f) else 0f }
+    return 0.5f + st[0] * ampScale * breathe * env * sin(t * 2f * PI.toFloat() * 1.35f - phase * 2f - st[3])
+}
+
+/** 정사각 영역(크기 s)에 세 가닥 선율을 그린다. [widthScale]로 작은 심볼에서는 선을 조금 굵게 한다. */
+internal fun DrawScope.drawMelodyStrands(s: Float, phase: Float, tint: Color, ampScale: Float = 1f, widthScale: Float = 1f) {
+    val left = 0.20f
+    val right = 0.80f
+    for (i in MELODY_STRANDS.indices.reversed()) {
+        val st = MELODY_STRANDS[i]
+        val path = Path()
+        val n = 64
+        for (k in 0..n) {
+            val t = k / n.toFloat()
+            val x = s * (left + (right - left) * t)
+            val y = s * melodyStrandY(i, t, phase, ampScale)
+            if (k == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        val c = tint.copy(alpha = st[2])
+        drawPath(
+            path,
+            Brush.horizontalGradient(listOf(c.copy(alpha = 0f), c, c, c.copy(alpha = 0f)), startX = s * left, endX = s * right),
+            style = Stroke(width = s * st[1] * widthScale, cap = StrokeCap.Round, join = StrokeJoin.Round),
+        )
     }
 }
 
