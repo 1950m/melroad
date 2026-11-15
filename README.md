@@ -52,6 +52,8 @@ docs/requirements/   상세개발요구서 v2
 ### APK
 
 - GitHub Releases에 등록 예정(링크는 등록 후 이 항목에 적는다).
+- 직접 서명해 만들 때: `keystore.properties.example`을 `keystore.properties`로 복사해 키스토어 경로·별칭·비밀번호를 채운 뒤
+  `./gradlew :app:assembleRelease` → `app/build/outputs/apk/release/app-release.apk`. 서명 파일과 비밀번호는 저장소에 넣지 않는다.
 
 ## 권한
 

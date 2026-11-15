@@ -7,6 +7,13 @@ plugins {
     alias(libs.plugins.paparazzi)
 }
 
+// release 서명 정보는 저장소 밖에 두고 프로젝트 루트의 keystore.properties(.gitignore 대상)로만 읽는다.
+// 파일이 없으면 서명하지 않은 release APK가 만들어진다. 형식은 keystore.properties.example 참고.
+val signingProps = java.util.Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
 android {
     namespace = "com.studio1950.melroad"
     // Media3 1.5.x가 compileSdk 35 이상을 요구한다. 실행 동작은 Pleos Connect 이미지(API 34)에 맞춰 targetSdk 34 유지.
@@ -23,8 +30,20 @@ android {
     // AAOS Car API(CarPropertyManager, CarUxRestrictionsManager)는 SDK의 optional android.car 라이브러리로 컴파일한다.
     useLibrary("android.car")
 
+    signingConfigs {
+        if (signingProps.isNotEmpty()) {
+            create("release") {
+                storeFile = file(signingProps.getProperty("storeFile"))
+                storePassword = signingProps.getProperty("storePassword")
+                keyAlias = signingProps.getProperty("keyAlias")
+                keyPassword = signingProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (signingProps.isNotEmpty()) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
