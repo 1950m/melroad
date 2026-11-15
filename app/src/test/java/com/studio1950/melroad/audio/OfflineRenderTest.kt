@@ -37,6 +37,9 @@ class OfflineRenderTest {
     /** @return (peak, rms) — 최종 출력단(컴프레서·소프트 클립) 이후 값 기준 */
     private fun render(events: List<MusicEvent>, startMs: Long, lengthMs: Long, out: File): Pair<Double, Double> {
         val voices = VoicePool(sampleRate)
+        // 앱과 같은 오케스트라 샘플(소스 폴더의 assets)을 쓴다. 없으면 합성 음색으로 렌더링된다.
+        voices.library = SampleLibrary.load { name -> File("src/main/assets/orchestra/$name").takeIf { it.exists() }?.inputStream() }
+        check(voices.library != null) { "오케스트라 샘플을 읽지 못함" }
         val chorus = StereoChorus(sampleRate)
         val reverb = StereoReverb(sampleRate)
         val master = MasterBus(sampleRate)

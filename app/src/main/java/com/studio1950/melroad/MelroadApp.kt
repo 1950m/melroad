@@ -35,7 +35,10 @@ class AppContainer(app: Application) {
     val repository = TripRepository(database, app.cacheDir)
     val carConnector = CarConnector(app)
     val drivingMonitor = DrivingRestrictionMonitor(carConnector)
-    private val audioEngine = AudioEngine()
+    private val audioEngine = AudioEngine().apply {
+        // 오케스트라 샘플(약 20MB)은 백그라운드에서 올린다. 준비되기 전에는 합성 음색으로 연주한다.
+        loadOrchestra { name -> runCatching { app.assets.open("orchestra/$name") }.getOrNull() }
+    }
     private val focus = AudioFocusController(app)
     private val realSource = RealVehicleSignalSource(app, carConnector)
 

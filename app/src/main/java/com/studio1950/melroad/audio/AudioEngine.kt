@@ -41,6 +41,17 @@ class AudioEngine(private val sampleRate: Int = 44_100) {
     val isAdvancing: Boolean get() = advancing
 
     /** 새 타임라인으로 교체한다. 울리던 소리는 끊는다. */
+    /**
+     * 오케스트라 샘플을 별도 스레드에서 읽어 연결한다. 실패하면(파일 누락 등) 합성 음색을 계속 쓴다.
+     * 로그에는 파일 이름·예외 종류만 남긴다.
+     */
+    fun loadOrchestra(open: (String) -> java.io.InputStream?) {
+        Thread({
+            val library = SampleLibrary.load(open)
+            if (library == null) Log.w(TAG, "오케스트라 샘플을 읽지 못해 합성 음색으로 연주") else voices.library = library
+        }, "melroad-samples").start()
+    }
+
     fun load(events: List<MusicEvent>, positionMs: Long = 0L) {
         synchronized(lock) {
             advancing = false

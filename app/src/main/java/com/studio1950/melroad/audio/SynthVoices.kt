@@ -36,11 +36,15 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
     private val duckRecover = (1.0 - exp(-1.0 / (DUCK_RECOVERY_S * sampleRate))).toFloat()
     private var duckBuf = FloatArray(1024)
 
+    /** 오케스트라 샘플. 올라오기 전(또는 읽기 실패)에는 null이고 그동안은 합성 음색으로 연주한다. */
+    @Volatile
+    var library: SampleLibrary? = null
+
     fun trigger(event: MusicEvent) {
         val v = voices.firstOrNull { !it.active }
             ?: voices.filter { it.releasing }.minByOrNull { it.startSerial }
             ?: voices.minBy { it.startSerial }
-        v.start(event, sampleRate, serial++)
+        v.start(event, sampleRate, serial++, library)
         if (event.instrument == Instrument.PERC && event.pitch == 36) kickPending = true
     }
 
@@ -110,13 +114,23 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
         private var swellSamples = 0L
         private var ducks = false
 
+        // 샘플 재생(오케스트라)
+        private var sample: ShortArray? = null
+        private var samplePos = 0.0
+        private var sampleStep = 1.0 // 출력 한 프레임마다 샘플 안에서 나아가는 거리
+        private var sampleGain = 0f
+        private var loopStart = 0.0
+        private var loopEnd = 0.0
+        private var loopFade = 0.0
+        private var looping = false
+
         // 필터·비브라토
         private var lpCoef = 1f
         private var lpL = 0f
         private var lpR = 0f
         private var lfoRate = 0.0
 
-        fun start(e: MusicEvent, sampleRate: Int, serialNo: Long) {
+        fun start(e: MusicEvent, sampleRate: Int, serialNo: Long, library: SampleLibrary?) {
             sr = sampleRate.toDouble()
             instrument = e.instrument
             startSerial = serialNo
@@ -133,6 +147,14 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
             val vel = (e.velocity / 127f).toDouble().pow(1.5).toFloat()
             val bright = 0.6f + (e.expression / 127f) * 0.6f
             var pan = 0f
+
+            sample = null
+            swellSamples = 0L
+            val bank = library?.let { bankFor(e, it) }
+            if (bank != null && library != null) {
+                startSampled(e, library, bank, vel, bright)
+                return
+            }
 
             when (instrument) {
                 Instrument.PIANO, Instrument.PIANO_SOFT -> {
@@ -280,6 +302,79 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
 
         private fun onePole(cutoffHz: Double): Float = (1.0 - exp(-2.0 * PI * cutoffHz / sr)).toFloat()
 
+        /**
+         * 작곡 엔진의 악기 역할 → 오케스트라 샘플 묶음.
+         * 선율·반주 화음은 피아노, 분산화음·핑거피킹은 하프, 화음 지속음·대선율은 음역에 따라 바이올린·비올라·첼로 합주,
+         * 짧은 저음은 첼로 피치카토·긴 저음은 첼로 활 긋기, 후렴 전 스웰은 팀파니 롤. 리듬(킥·스네어·하이햇)은 합성 그대로.
+         */
+        private fun bankFor(e: MusicEvent, lib: SampleLibrary): String? {
+            val bank = when (e.instrument) {
+                Instrument.PIANO, Instrument.EPIANO -> "piano"
+                Instrument.PIANO_SOFT, Instrument.GUITAR -> "harp"
+                Instrument.STRINGS -> when {
+                    e.pitch >= 67 -> "violins"
+                    e.pitch >= 55 -> "violas"
+                    else -> "cellos"
+                }
+                Instrument.PAD -> when {
+                    e.pitch >= 64 -> "violins"
+                    e.pitch >= 52 -> "violas"
+                    else -> "cellos"
+                }
+                Instrument.BASS -> if (e.durationMs < 700) "pizz" else "cellos"
+                Instrument.PERC -> if (e.pitch == 49) "timproll" else null
+            }
+            return bank?.takeIf { lib.has(it) }
+        }
+
+        private fun startSampled(e: MusicEvent, lib: SampleLibrary, bank: String, vel: Float, bright: Float) {
+            val s = lib.nearest(bank, e.pitch) ?: return
+            sample = s.data
+            samplePos = 0.0
+            sampleStep = 2.0.pow((e.pitch - s.root) / 12.0) * SampleLibrary.SAMPLE_RATE / sr
+            partials = 0
+            val sustained = bank == "violins" || bank == "violas" || bank == "cellos" || bank == "horn" || bank == "flute"
+            // 반복 구간: 샘플 뒤쪽 페이드(약 0.45초) 앞에서 끝나도록, 가운데 안정된 부분만 돌린다.
+            looping = sustained
+            val n = s.data.size.toDouble()
+            loopEnd = (n - 0.45 * SampleLibrary.SAMPLE_RATE).coerceAtLeast(n * 0.6)
+            loopStart = loopEnd * 0.55
+            loopFade = 0.12 * SampleLibrary.SAMPLE_RATE
+
+            // (세기 배율, 어택 초, 릴리스 초, 좌우 위치)
+            val (gain, attack, release, pan) = when (bank) {
+                "piano" -> if (e.instrument == Instrument.EPIANO) Quad(0.62f, 0.002, 0.30, -0.08f) else Quad(0.95f, 0.002, 0.28, ((e.pitch - 64) / 60f).coerceIn(-0.25f, 0.25f))
+                "harp" -> Quad(0.85f, 0.002, 1.1, -0.28f)
+                "violins" -> Quad(if (e.instrument == Instrument.PAD) 0.42f else 0.62f, 0.06, 0.55, -0.35f)
+                "violas" -> Quad(if (e.instrument == Instrument.PAD) 0.42f else 0.58f, 0.06, 0.55, 0.08f)
+                "cellos" -> Quad(if (e.instrument == Instrument.BASS) 0.70f else 0.48f, 0.05, 0.50, 0.32f)
+                "pizz" -> Quad(0.95f, 0.002, 0.45, 0.30f)
+                "timproll" -> Quad(0.55f, 0.02, 0.6, -0.15f)
+                else -> Quad(0.5f, 0.02, 0.4, 0f)
+            }
+            sampleGain = gain * vel * 1.6f
+            // 지속음 패드는 더 천천히 부풀어 오른다
+            val attackSeconds = if (e.instrument == Instrument.PAD) 0.45 else attack
+            attackSamples = (attackSeconds * sr).toInt().coerceAtLeast(1)
+            releaseMul = exp(-1.0 / (release * sr)).toFloat()
+            // 여린 음일수록 조금 어둡게(실제 악기처럼)
+            lpCoef = onePole(1800.0 + 9000.0 * (e.velocity / 127.0) * bright)
+            send = 0.06f
+            val angle = (pan + 1f) * (PI / 4).toFloat()
+            gainL = cos(angle)
+            gainR = sin(angle)
+            ducks = e.instrument == Instrument.PAD || e.instrument == Instrument.STRINGS || e.instrument == Instrument.EPIANO ||
+                e.instrument == Instrument.PIANO_SOFT || e.instrument == Instrument.GUITAR
+            if (bank == "timproll") {
+                // 스웰 길이 동안 서서히 커진 뒤 다음 박에서 자연스럽게 사라진다
+                attackSamples = (e.durationMs * this.sr / 1000).toInt().coerceAtLeast(1)
+                swellSamples = attackSamples.toLong()
+                noteOffAt = attackSamples.toLong()
+            }
+        }
+
+        private data class Quad(val gain: Float, val attack: Double, val release: Double, val pan: Float)
+
         private fun nextNoise(): Float {
             noiseState = noiseState * 6364136223846793005L + 1442695040888963407L
             return ((noiseState ushr 33).toInt() / 2147483648f) * 2f - 1f
@@ -308,7 +403,32 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
                 var outL = 0f
                 var outR = 0f
                 var alive = true
-                when (instrument) {
+                val data = sample
+                if (data != null) {
+                    var p = samplePos
+                    if (looping && p >= loopEnd) p -= (loopEnd - loopStart)
+                    val i0 = p.toInt()
+                    if (i0 + 1 >= data.size) {
+                        alive = false
+                    } else {
+                        val frac = (p - i0).toFloat()
+                        var v = (data[i0] + (data[i0 + 1] - data[i0]) * frac) / 32768f
+                        if (looping && p > loopEnd - loopFade) {
+                            // 반복 지점에 가까워지면 반복 시작 부분과 겹쳐 이어 붙여 '툭' 끊기는 소리를 없앤다.
+                            val q = p - (loopEnd - loopStart)
+                            val j0 = q.toInt()
+                            val f2 = (q - j0).toFloat()
+                            val v2 = (data[j0] + (data[j0 + 1] - data[j0]) * f2) / 32768f
+                            val w = ((p - (loopEnd - loopFade)) / loopFade).toFloat()
+                            v = v * (1f - w) + v2 * w
+                        }
+                        samplePos = p + sampleStep
+                        lpL += lpCoef * (v - lpL)
+                        val out = lpL * sampleGain
+                        outL = out * gainL
+                        outR = out * gainR
+                    }
+                } else when (instrument) {
                     Instrument.PIANO, Instrument.PIANO_SOFT, Instrument.BASS -> {
                         var s = 0f
                         alive = false

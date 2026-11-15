@@ -1,0 +1,15 @@
+MELROAD 오케스트라 샘플 출처
+
+이 폴더의 *.pcm 파일은 아래 샘플을 22.05kHz 모노 16비트로 줄이고 앞뒤를 다듬어 음량을 맞춘 것이다.
+
+- Versilian Studios Chamber Orchestra 2 Community Edition (VSCO 2 CE)
+  https://github.com/sgossner/VSCO-2-CE
+  라이선스: CC0 1.0 Universal (퍼블릭 도메인 헌정)
+  사용: 바이올린·비올라·첼로 합주(지속음), 첼로 피치카토, 하프, 플루트, 호른, 팀파니
+
+- Upright Piano — Simon Dalzell / Ivy Audio (VSCO 2 CE 포함)
+  원본 안내: "Bearer is granted right to redistribute this sample set by Versilian Studios LLC.
+  Credit to both original author and Versilian Studios is encouraged."
+  사용: 피아노
+
+변환 스크립트는 저장소의 tools/build_orchestra.py에 있다.
