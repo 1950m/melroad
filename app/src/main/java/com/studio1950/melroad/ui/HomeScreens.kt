@@ -72,7 +72,7 @@ fun SceneCard(
 /**
  * S01 첫 화면. 주행 장면을 화면 가득 깔고 글자 버튼 없이 아이콘으로만 둔다.
  * - 왼쪽 위: 멜로드 심볼과 이름 / 오른쪽 위: 정보(i)
- * - 아래 가운데: 숨 쉬는 빛을 두른 큰 재생 버튼(여행 시작), 그 오른쪽에 뮤직박스(재생 목록) 버튼
+ * - 아래 가운데: 숨 쉬는 빛을 두른 큰 재생 버튼(여행 시작) / 오른쪽 아래: 뮤직박스(재생 목록) 버튼
  * 아이콘 버튼은 화면 낭독기가 '여행 시작', '뮤직박스', '정보'로 읽는다.
  */
 @Composable
@@ -112,28 +112,24 @@ fun HomeScreen(onStartTrip: () -> Unit, onOurMusic: () -> Unit, onInfo: () -> Un
             onClick = onInfo,
             modifier = Modifier.align(Alignment.TopEnd).padding(end = 40.dp, top = 32.dp),
         )
-        Row(
+        // 아래 가운데: 여행 시작(재생). 숨 쉬는 빛을 두른 가장 큰 버튼
+        Box(
             Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(bottom = if (wide) 44.dp else 32.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(bottom = if (wide) 40.dp else 28.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Spacer(Modifier.weight(1f))
-            Box(contentAlignment = Alignment.Center) {
-                BreathingGlow(playSize * 1.7f)
-                RoundIconButton(RoundIcon.PLAY, stringResource(R.string.action_start_trip), playSize, onStartTrip, primary = true)
-            }
-            Box(Modifier.weight(1f)) {
-                RoundIconButton(
-                    RoundIcon.PLAYLIST,
-                    description = stringResource(R.string.action_our_music),
-                    size = sideSize,
-                    onClick = onOurMusic,
-                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp),
-                )
-            }
+            BreathingGlow(playSize * 1.7f)
+            RoundIconButton(RoundIcon.PLAY, stringResource(R.string.action_start_trip), playSize, onStartTrip, primary = true)
         }
+        // 오른쪽 아래: 뮤직박스(재생 목록)
+        RoundIconButton(
+            RoundIcon.PLAYLIST,
+            description = stringResource(R.string.action_our_music),
+            size = sideSize,
+            onClick = onOurMusic,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 40.dp, bottom = 40.dp),
+        )
     }
 }
 
