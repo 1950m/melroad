@@ -41,6 +41,17 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
         const val ENDING_TAIL_MS = 4_000L
         const val MAX_VELOCITY = 84
 
+        /** 뒷박(홀수 8분음표)을 늦추는 비율(%). 12%면 약 56:44의 가벼운 스윙이 된다. */
+        const val SWING_PERCENT = 12
+
+        // 타악 종류(PERC 음높이)
+        const val PERC_KICK = 36
+        const val PERC_RIM = 37
+        const val PERC_SNARE = 38
+        const val PERC_HAT = 42
+        const val PERC_OPEN_HAT = 46
+        const val PERC_SWELL = 49
+
         private const val MELODY_LOW = 3
         private const val MELODY_SPAN = 10
         private const val MAX_LEAP = 4
@@ -122,9 +133,16 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
 
     fun barStartMs(bar: Int): Long = eighthMs(bar, 0)
 
-    /** 8분음표 위치 → ms. 정수 연산이라 기기와 관계없이 같은 값이 나온다. */
-    fun eighthMs(bar: Int, eighth: Int): Long =
-        ((bar.toLong() * EIGHTHS_PER_BAR + eighth) * 30_000L) / bpm
+    /**
+     * 8분음표 위치 → ms. 정수 연산이라 기기와 관계없이 같은 값이 나온다.
+     * 뒷박은 [SWING_PERCENT]만큼 늦게 둬서 기계적으로 똑같은 간격 대신 살짝 흔들리는 그루브를 만든다(마디 시작은 그대로).
+     */
+    fun eighthMs(bar: Int, eighth: Int): Long {
+        val straight = ((bar.toLong() * EIGHTHS_PER_BAR + eighth) * 30_000L) / bpm
+        return if (eighth % 2 != 0) straight + swingMs else straight
+    }
+
+    private val swingMs: Long get() = (30_000L * SWING_PERCENT) / (bpm * 100L)
 
     fun composeBar(bar: Int, feature: PhraseFeature?): List<MusicEvent> {
         check(!ended) { "종지 이후에는 마디를 만들 수 없다" }
@@ -347,13 +365,16 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
             for (beat in 0 until 3) {
                 val start = eighthMs(bar, beat * 2)
                 val end = eighthMs(bar, beat * 2 + 1)
-                events.add(MusicEvent(start, end - start, Instrument.PERC, 36, 34 + beat * 4, 50))
+                events.add(MusicEvent(start, end - start, Instrument.PERC, PERC_KICK, 34 + beat * 4, 50))
             }
             val breath = eighthMs(bar, 6)
             events.removeAll {
                 it.atMs >= breath && (it.instrument == Instrument.PERC || it.instrument == Instrument.PIANO_SOFT ||
                     it.instrument == Instrument.EPIANO || it.instrument == Instrument.GUITAR)
             }
+            // 후렴 첫 박을 향해 서서히 차오르는 심벌 스웰(마지막 두 박 동안)
+            val swellStart = eighthMs(bar, 4)
+            events.add(MusicEvent(swellStart, eighthMs(bar + 1, 0) - swellStart, Instrument.PERC, PERC_SWELL, 30, 50))
         }
     }
 
@@ -524,7 +545,9 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
         val steps = listOf(degree + 2, degree + 4, degree + 6, if (Chords.allowsNinth(degree)) degree + 8 else degree + 7)
             .map { Chords.fold(it, lo, hi) }
             .distinct()
-        for (s in steps) note(out, bar, startEighth, lengthEighths, Instrument.EPIANO, s, velocity)
+            .sorted()
+        // 손으로 누르듯 아래 음부터 아주 조금씩 늦게(음마다 9ms) 울려 화음이 부드럽게 펼쳐지게 한다.
+        steps.forEachIndexed { i, s -> note(out, bar, startEighth, lengthEighths, Instrument.EPIANO, s, velocity, offsetMs = i * 9L) }
     }
 
     /** 하프처럼 흐르는 분산화음. 위로 올랐다가 내려온다. */
@@ -590,8 +613,11 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
     }
 
     /**
-     * 부드러운 리듬: 소프트 킥(36)·브러시(38)·셰이커(42). 날카로운 타격음 없이 가볍게 흐름만 준다.
-     * 정차(쉼)·도입에서는 쉬고, 밀도에 따라 촘촘해지되 세기는 오르지 않는다.
+     * 부드러운 리듬 섹션. 킥·스네어(또는 림)·하이햇으로 박을 분명히 하되 세기는 작게(상한 60) 둔다.
+     * - 주제: 1박 킥과 2·4박 백비트, 8분 하이햇(앞박을 조금 세게). 밀도가 낮으면 스네어 대신 림으로 더 가볍게.
+     * - 후렴: 킥이 당김음으로 더해지고 두 마디에 한 번 열린 하이햇으로 숨을 넣는다.
+     * - 브리지: 하프타임(1박 킥, 3박 림)으로 느긋하게. 간주: 하이햇과 림만.
+     * 정차(쉼)·도입에서는 쉬고, 밀도가 높아져도 세기는 오르지 않는다.
      */
     private fun addGroove(out: MutableList<MusicEvent>, bar: Int, rng: SeededRandom) {
         if (section == SectionType.INTRO || section == SectionType.REST || density == 0) return
@@ -603,24 +629,36 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
         }
         when (section) {
             SectionType.CHORUS -> {
-                hit(0, 36, 46); hit(4, 36, 40)
-                hit(2, 38, 30); hit(6, 38, 30)
-                for (e in 0 until 8) hit(e, 42, if (e % 2 == 0) 22 else 16)
+                hit(0, PERC_KICK, 54); hit(3, PERC_KICK, 38)
+                if (density >= 2) hit(4, PERC_KICK, 44)
+                hit(2, PERC_SNARE, 42); hit(6, PERC_SNARE, 44)
+                for (e in 0 until 8) hit(e, PERC_HAT, if (e % 2 == 0) 24 else 14)
+                if (bar % 2 == 1) hit(7, PERC_OPEN_HAT, 18)
             }
             SectionType.VERSE -> {
-                hit(0, 36, 42)
+                hit(0, PERC_KICK, 50)
                 if (density >= 2) {
-                    hit(4, 36, 36)
-                    hit(2, 38, 26); hit(6, 38, 26)
+                    hit(5, PERC_KICK, 36)
+                    hit(2, PERC_SNARE, 36); hit(6, PERC_SNARE, 38)
+                } else {
+                    hit(2, PERC_RIM, 30); hit(6, PERC_RIM, 32)
                 }
-                val shakerStep = if (density >= 3) 1 else 2
-                for (e in 0 until 8 step shakerStep) hit(e, 42, if (e % 2 == 0) 20 else 14)
+                val hatStep = if (density >= 2) 1 else 2
+                for (e in 0 until 8 step hatStep) hit(e, PERC_HAT, if (e % 2 == 0) 22 else 12)
+                if (density >= 3 && rng.chance(0.4)) hit(7, PERC_SNARE, 16) // 여린 꾸밈 스네어
             }
-            // 브리지·간주는 타악 없이 비워 두어 후렴과 대비를 만든다
+            SectionType.BRIDGE -> {
+                hit(0, PERC_KICK, 44); hit(4, PERC_RIM, 30)
+                if (density >= 2) for (e in 0 until 8 step 2) hit(e, PERC_HAT, 14)
+            }
+            SectionType.INTERLUDE -> {
+                for (e in 0 until 8 step 2) hit(e, PERC_HAT, if (e == 0) 16 else 11)
+                hit(6, PERC_RIM, 22)
+            }
             else -> Unit
         }
-        // 가끔 4박에 작은 브러시 장식
-        if ((section == SectionType.VERSE || section == SectionType.CHORUS) && bar % BARS_PER_PHRASE == 3 && rng.chance(0.5)) hit(7, 38, 20)
+        // 악절 끝 4박 뒤에 가끔 작은 스네어 장식
+        if ((section == SectionType.VERSE || section == SectionType.CHORUS) && bar % BARS_PER_PHRASE == 3 && rng.chance(0.5)) hit(7, PERC_SNARE, 20)
     }
 
     /** 구간의 마지막 마디: 다음 구간으로 넘어가는 짧은 상행 음계(피아노 분산음) */
@@ -794,19 +832,30 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
         step: Int,
         velocity: Int,
         expression: Int = 56,
+        offsetMs: Long = 0L,
     ) {
-        val start = eighthMs(bar, eighth)
+        val start = eighthMs(bar, eighth) + offsetMs
         val end = eighthMs(bar, eighth + lengthEighths)
+        val midi = pitch(step)
+        // 반주 음은 시각·음높이로 정해지는 작은 세기 차이(±3)를 줘서 기계처럼 똑같이 치지 않게 한다(선율은 따로 처리).
+        val human = if (instrument == Instrument.PIANO) 0 else humanize(start, midi, instrument)
         out.add(
             MusicEvent(
                 atMs = start,
                 durationMs = end - start,
                 instrument = instrument,
-                pitch = pitch(step),
-                velocity = velocity.coerceIn(1, MAX_VELOCITY),
+                pitch = midi,
+                velocity = (velocity + human).coerceIn(1, MAX_VELOCITY),
                 expression = expression.coerceIn(0, 127),
             ),
         )
+    }
+
+    /** 같은 입력이면 늘 같은 값(-3..3). 난수 순서를 쓰지 않아 다른 결정에 영향을 주지 않는다. */
+    private fun humanize(atMs: Long, midi: Int, instrument: Instrument): Int {
+        var h = atMs * 0x9E3779B97F4A7C15uL.toLong() + midi * 0x632BE59BD9B4E019L + instrument.ordinal * 0x85157AF5L
+        h = h xor (h ushr 31)
+        return ((h ushr 1) % 7).toInt() - 3
     }
 
     private fun sortEvents(events: List<MusicEvent>): List<MusicEvent> =

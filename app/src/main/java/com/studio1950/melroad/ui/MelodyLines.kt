@@ -289,12 +289,17 @@ private fun attack(dtMs: Long): Float = when {
     else -> exp(-(dtMs - 140L) / 420f)
 }
 
-/** 모든 음이 8분음표 격자 위에 있으므로, 이웃한 시작 시각 간격의 중앙값으로 한 박 길이를 추정한다(70~86 BPM 범위). */
+/**
+ * 모든 음이 8분음표 격자 위에 있다. 스윙 때문에 8분 간격이 길고 짧게 번갈아 나오므로,
+ * 이웃한 두 8분 간격의 합(= 한 박)들의 중앙값으로 박 길이를 추정한다(70~86 BPM 범위).
+ */
 private fun estimateBeatMs(list: List<MusicEvent>): Float {
     val starts = list.asSequence().map { it.atMs }.distinct().sorted().toList()
-    val diffs = starts.zipWithNext { a, b -> b - a }.filter { it in 340L..440L }.sorted()
-    val eighth = if (diffs.size >= 4) diffs[diffs.size / 2].toFloat() else 366f
-    return eighth * 2f
+    val diffs = starts.zipWithNext { a, b -> b - a }
+    val beats = diffs.zipWithNext { a, b -> if (a in 280L..470L && b in 280L..470L) a + b else -1L }
+        .filter { it in 680L..880L }
+        .sorted()
+    return if (beats.size >= 4) beats[beats.size / 2].toFloat() else 732f
 }
 
 /** 원근 바닥: 소실점으로 모이는 세로선 + 박자에 맞춰 다가오는 가로선 + 박자 음에 밝아지는 빛 */

@@ -22,6 +22,7 @@ class AudioEngine(private val sampleRate: Int = 44_100) {
     private val voices = VoicePool(sampleRate)
     private val reverb = StereoReverb(sampleRate)
     private val chorus = StereoChorus(sampleRate)
+    private val master = MasterBus(sampleRate)
     private val lock = Object()
 
     @Volatile private var alive = false
@@ -138,6 +139,7 @@ class AudioEngine(private val sampleRate: Int = 44_100) {
             while (alive) {
                 if (resetRequested) {
                     voices.allOff()
+                    master.reset()
                     gain = 0f
                     resetRequested = false
                 }
@@ -196,8 +198,13 @@ class AudioEngine(private val sampleRate: Int = 44_100) {
                         goal > gain -> gain + step
                         else -> gain - step
                     }
-                    pcm[i * 2] = toPcm(softClip(left[i] * gain * MASTER))
-                    pcm[i * 2 + 1] = toPcm(softClip(right[i] * gain * MASTER))
+                    left[i] *= gain * MASTER
+                    right[i] *= gain * MASTER
+                }
+                master.process(left, right, BLOCK)
+                for (i in 0 until BLOCK) {
+                    pcm[i * 2] = toPcm(left[i])
+                    pcm[i * 2 + 1] = toPcm(right[i])
                 }
                 track.write(pcm, 0, pcm.size)
                 if (advancing) playheadFrames = blockStart + BLOCK
@@ -213,12 +220,6 @@ class AudioEngine(private val sampleRate: Int = 44_100) {
     }
 
     private fun framesToMsCeil(frames: Long): Long = (frames * 1000L + sampleRate - 1) / sampleRate
-
-    private fun softClip(x: Float): Float {
-        // tanh 근사. ±1 근처에서 부드럽게 눌러 클리핑 잡음을 막는다.
-        val c = x.coerceIn(-3f, 3f)
-        return c * (27f + c * c) / (27f + 9f * c * c)
-    }
 
     private fun toPcm(x: Float): Short = (x.coerceIn(-1f, 1f) * 32_000f).toInt().toShort()
 

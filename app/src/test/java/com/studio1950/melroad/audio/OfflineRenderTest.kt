@@ -34,11 +34,12 @@ class OfflineRenderTest {
         }
     }
 
-    /** @return (peak, rms) — 소프트 클리퍼 이전 값 기준 */
+    /** @return (peak, rms) — 최종 출력단(컴프레서·소프트 클립) 이후 값 기준 */
     private fun render(events: List<MusicEvent>, startMs: Long, lengthMs: Long, out: File): Pair<Double, Double> {
         val voices = VoicePool(sampleRate)
         val chorus = StereoChorus(sampleRate)
         val reverb = StereoReverb(sampleRate)
+        val master = MasterBus(sampleRate)
         val block = 512
         val totalFrames = (lengthMs * sampleRate / 1000).toInt()
         val left = FloatArray(block)
@@ -73,22 +74,22 @@ class OfflineRenderTest {
             chorus.process(busL, busR, left, right, n)
             reverb.process(left, right, n, 0.32f)
             for (i in 0 until n) {
-                val l = left[i] * 1.4f
-                val r = right[i] * 1.4f
+                left[i] *= 1.4f
+                right[i] *= 1.4f
+            }
+            master.process(left, right, n)
+            for (i in 0 until n) {
+                val l = left[i]
+                val r = right[i]
                 peak = maxOf(peak, abs(l).toDouble(), abs(r).toDouble())
                 sumSq += (l * l + r * r) / 2.0
-                pcm[(frame + i) * 2] = (softClip(l) * 32_000f).toInt().toShort()
-                pcm[(frame + i) * 2 + 1] = (softClip(r) * 32_000f).toInt().toShort()
+                pcm[(frame + i) * 2] = (l * 32_000f).toInt().toShort()
+                pcm[(frame + i) * 2 + 1] = (r * 32_000f).toInt().toShort()
             }
             frame += n
         }
         writeWav(out, pcm)
         return peak to sqrt(sumSq / totalFrames)
-    }
-
-    private fun softClip(x: Float): Float {
-        val c = x.coerceIn(-3f, 3f)
-        return c * (27f + c * c) / (27f + 9f * c * c)
     }
 
     private fun writeWav(file: File, pcm: ShortArray) {

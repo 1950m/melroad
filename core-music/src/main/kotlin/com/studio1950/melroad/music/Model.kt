@@ -18,7 +18,7 @@ data class DriveSample(
 /**
  * PIANO는 선율, PIANO_SOFT는 분산화음(같은 음색을 더 여리게), PAD는 지속 화음, BASS는 저음,
  * EPIANO는 부드러운 일렉트릭 피아노 화음, STRINGS는 현악(후렴 화음·대선율·브리지 선율),
- * GUITAR는 현을 튕기는 소리(핑거피킹·간주 선율), PERC는 부드러운 리듬(pitch 36 킥, 38 브러시, 42 셰이커).
+ * GUITAR는 현을 튕기는 소리(핑거피킹·간주 선율), PERC는 부드러운 리듬(pitch 36 킥, 37 림, 38 스네어, 42 닫힌 하이햇, 46 열린 하이햇, 49 심벌 스웰).
  * 저장된 곡과의 호환을 위해 이름을 바꾸지 않는다.
  */
 enum class Instrument { PIANO, PIANO_SOFT, PAD, BASS, EPIANO, STRINGS, GUITAR, PERC }

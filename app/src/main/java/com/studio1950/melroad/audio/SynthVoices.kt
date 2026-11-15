@@ -19,7 +19,9 @@ import kotlin.math.sqrt
  * - PAD: 따뜻한 파형 2개(디튠) + 저역 통과 필터.
  * - BASS: 사인파 + 2배음, 둥근 저음.
  * - GUITAR: 카플러스-스트롱(현 튕김) 합성. 부드러운 나일론 기타처럼 들리도록 들뜸 잡음을 미리 걸러 둔다.
- * - PERC: 소프트 킥(음높이가 내려가는 사인파)·브러시·셰이커(걸러진 잡음). 날카로운 어택 없이 작게.
+ * - PERC: 소프트 킥(음높이가 내려가는 사인파 + 아주 짧은 어택), 스네어(몸통 톤 + 걸러진 잡음), 림(짧은 톡),
+ *   닫힌·열린 하이햇(고역 잡음), 심벌 스웰(서서히 차오르는 잡음). 날카로운 어택 없이 작게.
+ * - 킥이 울리면 패드·현악·일렉트릭 피아노·기타가 아주 살짝 숨을 쉬듯 줄었다 돌아온다(사이드체인). 리듬과 화음이 한 덩어리로 들린다.
  *
  * 청각 피로를 줄이려고 날카로운 어택과 고배음을 약하게 잡고, 각 음색의 일부를 코러스 버스로 보낸다.
  */
@@ -28,21 +30,39 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
     private val voices = Array(size) { Voice() }
     private var serial = 0L
 
+    // 사이드체인: 킥이 울리는 순간 DUCK_DEPTH까지 내려갔다가 DUCK_RECOVERY_S에 걸쳐 돌아온다.
+    private var duck = 1f
+    private var kickPending = false
+    private val duckRecover = (1.0 - exp(-1.0 / (DUCK_RECOVERY_S * sampleRate))).toFloat()
+    private var duckBuf = FloatArray(1024)
+
     fun trigger(event: MusicEvent) {
         val v = voices.firstOrNull { !it.active }
             ?: voices.filter { it.releasing }.minByOrNull { it.startSerial }
             ?: voices.minBy { it.startSerial }
         v.start(event, sampleRate, serial++)
+        if (event.instrument == Instrument.PERC && event.pitch == 36) kickPending = true
     }
 
     fun allOff() {
         for (v in voices) v.active = false
+        duck = 1f
+        kickPending = false
     }
 
     /** 건조 신호는 left/right에, 코러스 보낼 양은 busL/busR에 더한다. [from, to) 구간. */
     fun render(left: FloatArray, right: FloatArray, busL: FloatArray, busR: FloatArray, from: Int, to: Int) {
         if (from >= to) return
-        for (v in voices) if (v.active) v.render(left, right, busL, busR, from, to)
+        if (duckBuf.size < to) duckBuf = FloatArray(to)
+        for (i in from until to) {
+            if (kickPending) {
+                duck = minOf(duck, DUCK_DEPTH)
+                kickPending = false
+            }
+            duck += (1f - duck) * duckRecover
+            duckBuf[i] = duck
+        }
+        for (v in voices) if (v.active) v.render(left, right, busL, busR, duckBuf, from, to)
     }
 
     private class Voice {
@@ -80,10 +100,15 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
         private var ksDecay = 0.99f
         private var ksLevel = 0f
 
-        // 타악기
+        // 타악기: 몸통 톤(사인)과 잡음을 따로 감쇠시킨다
         private var percType = 42
         private var noiseState = 1L
         private var noiseLow = 0f
+        private var bodyAmp = 0f
+        private var bodyDecay = 1f
+        private var bodyFreq = 0.0
+        private var swellSamples = 0L
+        private var ducks = false
 
         // 필터·비브라토
         private var lpCoef = 1f
@@ -199,47 +224,58 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
                     percType = e.pitch
                     noiseState = serialNo * 2862933555777941757L + 3037000493L
                     noiseLow = 0f
-                    val (scale, seconds, attack) = when (percType) {
-                        36 -> Triple(0.55f, 0.22, 0.002)
-                        38 -> Triple(0.10f, 0.11, 0.008)
-                        else -> Triple(0.06f, 0.045, 0.004)
+                    phase[0] = 0.0
+                    swellSamples = 0L
+                    // (잡음 세기, 잡음 감쇠 초, 몸통 톤 세기, 몸통 감쇠 초, 몸통 Hz, 잡음 저역통과 Hz)
+                    val spec = when (percType) {
+                        36 -> doubleArrayOf(0.05, 0.006, 0.62, 0.28, 0.0, 2200.0) // 킥: 몸통 Hz는 렌더 중 내려간다
+                        37 -> doubleArrayOf(0.10, 0.022, 0.16, 0.030, 420.0, 4200.0)
+                        38 -> doubleArrayOf(0.13, 0.16, 0.20, 0.070, 185.0, 6500.0)
+                        46 -> doubleArrayOf(0.06, 0.28, 0.0, 0.01, 0.0, 12_000.0)
+                        49 -> doubleArrayOf(0.05, 0.45, 0.0, 0.01, 0.0, 8000.0)
+                        else -> doubleArrayOf(0.085, 0.035, 0.0, 0.01, 0.0, 12_000.0) // 닫힌 하이햇
                     }
-                    amp[0] = vel * scale
-                    decay[0] = exp(-1.0 / (seconds * sr)).toFloat()
-                    attackSamples = (attack * sr).toInt().coerceAtLeast(1)
+                    amp[0] = vel * spec[0].toFloat()
+                    decay[0] = exp(-1.0 / (spec[1] * sr)).toFloat()
+                    bodyAmp = vel * spec[2].toFloat()
+                    bodyDecay = exp(-1.0 / (spec[3] * sr)).toFloat()
+                    bodyFreq = spec[4]
+                    lpCoef = onePole(spec[5])
+                    attackSamples = (0.002 * sr).toInt().coerceAtLeast(1)
+                    if (percType == 49) {
+                        // 스웰: 이벤트 길이 동안 서서히 차오른 뒤 짧게 사라진다
+                        swellSamples = (e.durationMs * sampleRate / 1000).coerceAtLeast(1)
+                        attackSamples = swellSamples.toInt()
+                    }
                     noteOffAt = Long.MAX_VALUE // 짧은 타악은 길이 대신 자연 감쇠로 끝난다
                     releaseMul = 1f
                     pan = when (percType) {
-                        38 -> -0.2f
-                        42 -> 0.25f
+                        37, 38 -> -0.12f
+                        42, 46 -> 0.28f
+                        49 -> -0.2f
                         else -> 0f
                     }
-                    send = 0f
-                    lpCoef = onePole(
-                        when (percType) {
-                            36 -> 400.0
-                            38 -> 5000.0
-                            else -> 9000.0
-                        },
-                    )
+                    send = if (percType == 38 || percType == 37 || percType == 49) 0.12f else 0f
                 }
                 Instrument.BASS -> {
                     partials = 2
                     freq[0] = f0
                     freq[1] = f0 * 2.0
-                    amp[0] = vel * 0.32f
-                    amp[1] = vel * 0.07f
+                    amp[0] = vel * 0.34f
+                    amp[1] = vel * 0.08f
                     decay[0] = 1f
                     decay[1] = exp(-1.0 / (0.8 * sr)).toFloat()
                     attackSamples = (0.015 * sr).toInt()
                     releaseMul = exp(-1.0 / (0.3 * sr)).toFloat()
                     send = 0f
-                    lpCoef = onePole(900.0)
+                    lpCoef = onePole(1050.0)
                 }
             }
             val angle = (pan + 1f) * (PI / 4).toFloat()
             gainL = cos(angle)
             gainR = sin(angle)
+            ducks = instrument == Instrument.PAD || instrument == Instrument.STRINGS || instrument == Instrument.EPIANO ||
+                instrument == Instrument.PIANO_SOFT || instrument == Instrument.GUITAR
         }
 
         private fun onePole(cutoffHz: Double): Float = (1.0 - exp(-2.0 * PI * cutoffHz / sr)).toFloat()
@@ -249,13 +285,17 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
             return ((noiseState ushr 33).toInt() / 2147483648f) * 2f - 1f
         }
 
-        fun render(left: FloatArray, right: FloatArray, busL: FloatArray, busR: FloatArray, from: Int, to: Int) {
+        fun render(left: FloatArray, right: FloatArray, busL: FloatArray, busR: FloatArray, duckBuf: FloatArray, from: Int, to: Int) {
             for (i in from until to) {
                 val t = age / sr
                 val env: Float = when {
                     age < attackSamples -> {
                         val x = age.toFloat() / attackSamples
-                        if (instrument == Instrument.PAD || instrument == Instrument.STRINGS) x * x * (3 - 2 * x) else x
+                        when {
+                            instrument == Instrument.PAD || instrument == Instrument.STRINGS -> x * x * (3 - 2 * x)
+                            swellSamples > 0 -> x * x * x // 스웰은 끝으로 갈수록 빠르게 차오른다
+                            else -> x
+                        }
                     }
                     instrument == Instrument.BASS -> (0.75 + 0.25 * exp(-t / 0.4)).toFloat()
                     else -> 1f
@@ -346,24 +386,31 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
                         outR = lpL * gainR
                     }
                     Instrument.PERC -> {
-                        val a = amp[0]
-                        val s: Float
-                        if (percType == 36) {
-                            // 음높이가 115Hz → 45Hz로 빠르게 내려가는 부드러운 킥
-                            val f = 45.0 + 70.0 * exp(-t / 0.03)
+                        // 몸통 톤: 킥은 120Hz → 48Hz로 빠르게 내려가고, 스네어·림은 고정 음높이
+                        var body = 0f
+                        if (bodyAmp > 1e-5f) {
+                            val f = if (percType == 36) 48.0 + 72.0 * exp(-t / 0.032) else bodyFreq
                             phase[0] += f / sr
                             if (phase[0] >= 1.0) phase[0] -= 1.0
-                            s = a * Wave.sine(phase[0])
-                        } else {
-                            val n = nextNoise()
-                            noiseLow += 0.12f * (n - noiseLow)
-                            s = a * (n - noiseLow) // 저역을 덜어 낸 잡음
+                            body = bodyAmp * Wave.sine(phase[0])
+                            bodyAmp *= bodyDecay
                         }
-                        amp[0] = a * decay[0]
-                        lpL += lpCoef * (s - lpL)
-                        if (amp[0] < 1e-4f) alive = false
-                        outL = lpL * gainL
-                        outR = lpL * gainR
+                        // 잡음: 저역을 덜어 낸 뒤 음색별 저역통과로 거칠지 않게
+                        var noise = 0f
+                        val a = amp[0]
+                        if (a > 1e-5f) {
+                            val n = nextNoise()
+                            noiseLow += (if (percType == 42 || percType == 46) 0.35f else 0.12f) * (n - noiseLow)
+                            noise = a * (n - noiseLow)
+                            // 스웰은 차오르는 동안 감쇠하지 않는다
+                            if (swellSamples == 0L || age >= swellSamples) amp[0] = a * decay[0]
+                        }
+                        lpL += lpCoef * (noise - lpL)
+                        var s = body + lpL
+                        if (percType == 36) s = s * 1.25f / (1f + kotlin.math.abs(s) * 0.6f) // 킥을 둥글게 살짝 눌러 따뜻하게
+                        if (bodyAmp < 1e-4f && amp[0] < 1e-4f && (swellSamples == 0L || age > swellSamples)) alive = false
+                        outL = s * gainL
+                        outR = s * gainR
                     }
                     Instrument.PAD -> {
                         var l = 0f
@@ -382,7 +429,7 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
                     }
                 }
 
-                val g = env * releaseLevel
+                val g = env * releaseLevel * (if (ducks) duckBuf[i] else 1f)
                 val l = outL * g
                 val r = outR * g
                 left[i] += l
@@ -400,6 +447,10 @@ internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
         }
     }
 }
+
+/** 사이드체인으로 줄어드는 최저 비율(약 -3dB)과 회복 시간 */
+private const val DUCK_DEPTH = 0.70f
+private const val DUCK_RECOVERY_S = 0.22
 
 /** 파형 테이블. 톱니·따뜻한 파형은 배음 수를 제한해 거친 고역(에일리어싱)을 줄였다. */
 internal object Wave {
