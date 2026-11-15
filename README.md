@@ -10,7 +10,7 @@
 
 | 모드 | 입력 | 표시 |
 |---|---|---|
-| LIVE | 실제 차량 신호(현재: AAOS 차량 속도만) | "실제 주행 · 속도 기반" |
+| LIVE | 실제 차량 신호: AAOS 차량 속도 + Pleos FusedLocation(위치·진행 방향·고도), 확인된 것만 연결 | 시작 화면에 연결될 신호 표시, 속도만이면 "차량 속도 신호" 표시 |
 | DEMO | 사전 제작 합성 주행 데이터(제주 해안도로 약 30분 / 언덕길 약 20분 / 도심 약 15분) | 시작 화면의 "시뮬레이션" 구역·저장된 곡 제목·화면 낭독기 안내에 "시뮬레이션" 표기(주행 화면에는 글자 표시 없음) |
 | MEMORY | 저장된 MusicEvent 타임라인을 그대로 재생(새로 작곡하지 않음) | 실제 주행/시뮬레이션 구분 표시 |
 
@@ -48,7 +48,7 @@ sampledata/          시뮬레이션 데이터 설명
 |---|---|---|
 | `android.car.permission.CAR_SPEED` | 차량 속도(LIVE) | 선언, 런타임 요청 |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Media3 재생 서비스 | 선언 |
-| `pleos.car.permission.FUSED_LOCATION` | 위치·방향·고도 | **미선언** (어댑터 미구현) |
+| `pleos.car.permission.FUSED_LOCATION` | 위치·진행 방향·고도(좌표는 저장·전송하지 않음) | 선언, 런타임 요청(문서상 dangerous) |
 
 ## 개인정보
 
@@ -67,7 +67,7 @@ sampledata/          시뮬레이션 데이터 설명
 | Media3 세션 | 태블릿에서 PLAYING 확인, 차량 미디어 센터 미검증 |
 | 차량 속도 어댑터(P5) | 구현, Pleos AVD 미검증 |
 | CarUxRestrictions(P7) | 구현, 미검증 |
-| FusedLocation(P6) | SDK 1.1.3 클래스·필드 확인 완료, 어댑터 **미구현** |
+| FusedLocation(P6) | 어댑터 구현(지원 확인 → 권한 → initialize → 콜백 → 해제·release), 빌드 통과. Pleos AVD **미검증** |
 | Pleos Connect AVD 설치·실행 | **미실시**(시스템 이미지 미설치) |
 | 시각장애인·저시력 당사자 사용성 검증 | 미진행 |
 

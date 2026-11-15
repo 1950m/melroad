@@ -73,6 +73,18 @@ class PleosApiProbeTest {
                 out.append("  values: ").append(cls.enumConstants?.joinToString() ?: "").append('\n')
             }
         }
+        // 어떤 SDK 파일(모듈)에 들어 있는지: 컴파일 경로에 없고 실행 시에만 오는 클래스를 가려내는 데 쓴다.
+        out.append("\n== code source\n")
+        for (name in listOf(
+            "ai.pleos.playground.location.fused.FusedLocation",
+            "ai.pleos.playground.location.fused.model.LocationData",
+            "ai.pleos.playground.location.fused.constant.ErrorCode",
+            "ai.pleos.playground.location.fused.exception.LocationException",
+            "ai.pleos.playground.location.fused.constant.PleosPermission",
+        )) {
+            val where = runCatching { Class.forName(name, false, loader).protectionDomain?.codeSource?.location?.path }.getOrNull()
+            out.append(name).append(" <- ").append(where?.substringAfterLast("/caches/") ?: "?").append('\n')
+        }
         val file = File("build/pleos-api.txt")
         file.parentFile?.mkdirs()
         file.writeText("classes=${classNames.size}\n$out")

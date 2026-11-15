@@ -13,11 +13,8 @@
 
     <!-- AAOS 차량 속도(PERF_VEHICLE_SPEED). 런타임 허용이 필요한 권한이다. -->
     <uses-permission android:name="android.car.permission.CAR_SPEED" />
-
-    <!--
-        Pleos FusedLocation 권한(pleos.car.permission.FUSED_LOCATION)은 어댑터를 실제로 연결할 때 추가한다.
-        사용하지 않는 권한을 미리 선언하지 않는다.
-    -->
+    <!-- Pleos FusedLocation: 위치·진행 방향·고도(문서상 보호 수준 dangerous → 실행 중 요청). 좌표는 저장·전송하지 않는다. -->
+    <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
 
     <application
         android:name=".MelroadApp"

@@ -266,6 +266,7 @@ class TripSessionController(
     private fun liveSummary(cap: LiveCapability?): String = when {
         cap == null -> "UNKNOWN"
         cap.speedOnly -> "SPEED_ONLY"
+        cap.locationOnly -> "LOCATION_ONLY"
         else -> "SPEED_LOCATION"
     }
 

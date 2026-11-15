@@ -177,8 +177,11 @@ fun RunningScreen(
                 position = position,
             ) {
                 if (s.source == TripSource.LIVE) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        PanelChip(stringResource(R.string.signal_speed))
+                    // 속도만 쓰는 제한 모드일 때만 알린다(경로·고도 반영이 없다는 뜻)
+                    if (s.liveCapability?.speedOnly == true) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            PanelChip(stringResource(R.string.signal_speed))
+                        }
                     }
                     when (s.signalStatus) {
                         SignalSourceStatus.SIGNAL_LOST -> Text(stringResource(R.string.signal_lost), style = MaterialTheme.typography.bodyMedium, color = Color.White)

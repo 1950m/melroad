@@ -167,28 +167,37 @@ fun PrepareScreen(
         SectionCard {
             Text(stringResource(R.string.prepare_live_title), style = MaterialTheme.typography.titleLarge)
             val cap = s.liveCapability
+            val needsPermission = cap != null &&
+                (cap.speed == CapabilityState.PERMISSION_REQUIRED || cap.location == CapabilityState.PERMISSION_REQUIRED)
             when {
                 s.phase == SessionPhase.CHECKING || cap == null ->
                     StatusText(stringResource(R.string.prepare_checking), large = false)
-                cap.speed == CapabilityState.AVAILABLE -> {
-                    StatusText(stringResource(R.string.prepare_live_speed_only), large = false)
+                cap.canStartLive -> {
+                    // 실제로 연결될 신호만 적는다(위치가 없으면 굽이·오르막을 반영하지 않는다는 뜻)
+                    val label = when {
+                        cap.speedOnly -> R.string.prepare_live_speed_only
+                        cap.locationOnly -> R.string.prepare_live_location_only
+                        else -> R.string.prepare_live_speed_location
+                    }
+                    StatusText(stringResource(label), large = false)
                     BigButton(stringResource(R.string.action_start_live), onStartLive, enabled = !drivingConfirmed, icon = IconKind.PLAY)
                 }
-                cap.speed == CapabilityState.PERMISSION_REQUIRED -> {
-                    StatusText(stringResource(R.string.prepare_live_permission), large = false)
-                    if (driving.restricted) {
-                        SubtleText(stringResource(R.string.prepare_permission_driving))
-                    } else {
-                        BigButton(stringResource(R.string.action_allow_permission), onRequestPermission, primary = false)
-                    }
-                }
-                cap.speed == CapabilityState.NOT_AUTOMOTIVE ->
+                cap.speed == CapabilityState.NOT_AUTOMOTIVE && !needsPermission ->
                     StatusText(stringResource(R.string.prepare_live_not_car), large = false)
-                cap.speed == CapabilityState.UNSUPPORTED ->
+                cap.speed == CapabilityState.UNSUPPORTED && cap.location == CapabilityState.UNSUPPORTED ->
                     StatusText(stringResource(R.string.prepare_live_unsupported), large = false)
+                needsPermission -> StatusText(stringResource(R.string.prepare_live_permission), large = false)
                 else -> StatusText(stringResource(R.string.prepare_live_error), large = false)
             }
-            if (cap != null && !cap.canStartLive && cap.speed != CapabilityState.PERMISSION_REQUIRED) {
+            // 권한이 빠진 신호가 있으면(이미 시작할 수 있어도 위치를 더하려면) 허용 버튼을 보인다. 주행 중에는 권한 화면을 띄우지 않는다.
+            if (needsPermission) {
+                if (driving.restricted) {
+                    SubtleText(stringResource(R.string.prepare_permission_driving))
+                } else {
+                    BigButton(stringResource(R.string.action_allow_permission), onRequestPermission, primary = false)
+                }
+            }
+            if (cap != null && !cap.canStartLive && !needsPermission) {
                 SubtleText(stringResource(R.string.prepare_demo_hint))
             }
         }

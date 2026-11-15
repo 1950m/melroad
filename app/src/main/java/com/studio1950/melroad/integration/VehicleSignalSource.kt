@@ -13,7 +13,7 @@ enum class CapabilityState {
     PERMISSION_REQUIRED,
     UNSUPPORTED,
     NOT_AUTOMOTIVE,
-    /** 앱에 아직 연동 코드가 없음(예: FusedLocation 어댑터 미구현) */
+    /** 앱에 아직 연동 코드가 없음 */
     NOT_INTEGRATED,
     ERROR,
 }
@@ -24,6 +24,13 @@ data class LiveCapability(
 ) {
     val canStartLive: Boolean get() = speed == CapabilityState.AVAILABLE || location == CapabilityState.AVAILABLE
     val speedOnly: Boolean get() = speed == CapabilityState.AVAILABLE && location != CapabilityState.AVAILABLE
+    val locationOnly: Boolean get() = location == CapabilityState.AVAILABLE && speed != CapabilityState.AVAILABLE
+
+    /** 아직 허용받지 못한 실행 중 권한(속도·위치)의 이름 목록 */
+    fun missingPermissions(speedPermission: String, locationPermission: String): Array<String> = buildList {
+        if (speed == CapabilityState.PERMISSION_REQUIRED) add(speedPermission)
+        if (location == CapabilityState.PERMISSION_REQUIRED) add(locationPermission)
+    }.toTypedArray()
 }
 
 /** 음악 재생 위치. 일시정지 중이면 null(그동안 들어온 실제 신호는 버린다). */

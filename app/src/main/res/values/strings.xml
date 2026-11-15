@@ -11,8 +11,10 @@
     <!-- S02 시작 준비 -->
     <string name="prepare_title">여행 시작</string>
     <string name="prepare_live_title">실제 주행</string>
-    <string name="prepare_live_speed_only">차량 속도 신호 사용 · 위치 신호 미연결</string>
-    <string name="prepare_live_permission">차량 속도 권한 필요</string>
+    <string name="prepare_live_speed_only">차량 속도 신호 사용 · 위치 신호 없음</string>
+    <string name="prepare_live_location_only">위치·방향 신호 사용 · 차량 속도 신호 없음</string>
+    <string name="prepare_live_speed_location">차량 속도·위치·방향 신호 사용</string>
+    <string name="prepare_live_permission">차량 신호 권한 필요</string>
     <string name="prepare_permission_driving">정차 후 권한 허용 가능</string>
     <string name="prepare_live_not_car">차량 기기가 아님 · 실제 주행 신호 없음</string>
     <string name="prepare_live_unsupported">이 차량은 실제 주행 신호 미지원</string>

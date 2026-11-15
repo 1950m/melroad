@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.studio1950.melroad.domain.PlaybackItemKind
 import com.studio1950.melroad.domain.SessionPhase
 import com.studio1950.melroad.integration.car.CarConnector
+import com.studio1950.melroad.integration.pleos.PleosLocationAdapter
 import com.studio1950.melroad.ui.theme.AppBackground
 import com.studio1950.melroad.ui.theme.HyundaiBlue
 import kotlinx.coroutines.delay
@@ -56,7 +57,8 @@ fun MelroadRoot(vm: MelroadViewModel) {
         }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+    // 속도·위치 권한 가운데 아직 없는 것만 한 번에 요청한다.
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         vm.recheckCapability()
     }
 
@@ -131,7 +133,10 @@ fun MelroadRoot(vm: MelroadViewModel) {
                         s = s,
                         driving = driving,
                         onBack = { vm.go(Screen.HOME) },
-                        onRequestPermission = { permissionLauncher.launch(CarConnector.PERMISSION_SPEED) },
+                        onRequestPermission = {
+                            val missing = s.liveCapability?.missingPermissions(CarConnector.PERMISSION_SPEED, PleosLocationAdapter.PERMISSION) ?: emptyArray()
+                            if (missing.isNotEmpty()) permissionLauncher.launch(missing)
+                        },
                         onStartLive = vm::startLive,
                         onStartDemo = vm::startDemo,
                     )

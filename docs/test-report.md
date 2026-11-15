@@ -59,7 +59,7 @@
 |---|---|
 | CarPropertyManager PERF_VEHICLE_SPEED | 구현, **미검증**(휴대폰·태블릿 이미지는 차량이 아니라 NOT_AUTOMOTIVE로 안내) |
 | CarUxRestrictionsManager | 구현, **미검증** |
-| Pleos FusedLocation 1.1.3 | 의존성 해석·클래스 확인 완료(PleosApiProbeTest). `FusedLocation(Context)`: isSupported/initialize/registerFusedLocationCallback/unregisterFusedLocationCallback/release, `LocationData(latitude, longitude, altitude, heading, confidence, timestampMillis)`, 권한 `pleos.car.permission.FUSED_LOCATION`. 어댑터 **미구현**, Pleos AVD **미검증** |
+| Pleos FusedLocation 1.1.3 | **어댑터 구현, 빌드 통과, 기기 미검증**. 공식 문서 순서(isSupported → 권한 → initialize → registerFusedLocationCallback / unregister → release)와 SDK에서 확인한 API만 사용. `LocationData(latitude, longitude, altitude, heading, confidence, timestampMillis)` — 문서에 단위·척도 설명이 없어 confidence는 미사용, heading은 0~360 유한값만, 고도는 미터로 가정(미검증). 오류 코드 클래스는 실행 시 모듈(fused-location-data 0.0.3)에 있어 이름으로 판별. 권한 `pleos.car.permission.FUSED_LOCATION`(문서상 dangerous) 선언·실행 중 요청 |
 | Pleos Vehicle 2.3.2 | 의존성 해석·클래스 확인 완료. `Vehicle(Context).getGear()` → `registerGearSelection(GearSelectionListener)`, `VehicleGear`(PARK/DRIVE 등). 권한 문자열(`pleos.car.permission.CAR_DRIVE` 등) 확인, API별 필요 권한은 **미확인**. 어댑터 **미구현** |
 | SDK가 병합하는 manifest 항목 | `<queries>` FusedLocation 서비스 패키지, `FUSED_LOCATION_BINDING`, `VEHICLE_BINDING`, `ACCESS_NETWORK_STATE`(SDK 제공, 앱은 네트워크 통신 없음) |
 | NaviHelper | 미구현(MVP 범위 아님) |
