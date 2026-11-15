@@ -81,8 +81,9 @@ fun RoundIconButton(
             .clip(CircleShape)
             .background(fill)
             .border(
-                1.5.dp,
-                if (primary) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.5f), Color.Transparent)) else Brush.verticalGradient(listOf(Color.White, Color(0xFFCBD5E1))),
+                if (primary) 2.5.dp else 1.5.dp,
+                // 어두운 배경 위에서도 윤곽이 보이도록 큰 버튼은 밝은 테두리를 두른다
+                if (primary) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.9f), Color(0xFF9FD8F0).copy(alpha = 0.55f))) else Brush.verticalGradient(listOf(Color.White, Color(0xFFCBD5E1))),
                 CircleShape,
             )
             .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)

@@ -80,6 +80,8 @@ sampledata/          시뮬레이션 데이터 설명
 
 작곡은 규칙 기반·결정론적이며 생성형 AI를 쓰지 않는다.
 
+첫 화면 배경(`res/drawable-nodpi/home_scene.webp`)은 외부 이미지 없이 `tools/render_home_scene.py`로 직접 렌더링한 자체 제작물이다.
+
 ## 한계
 
 - 공모전 시연 단계의 앱입니다. 실제 차량 위치 연동과 당사자 사용자 테스트는 아직 진행 전입니다.

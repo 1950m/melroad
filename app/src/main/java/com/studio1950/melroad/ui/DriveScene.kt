@@ -329,7 +329,7 @@ private fun DrawScope.drawRoad(v: View, phase: Float, playing: Boolean, time: Fl
  * 바퀴·후미등·번호판·사이드미러 없이 차체 면의 굴곡(뒤 펜더-허리-앞 펜더), 유리 지붕, 앞유리 경계,
  * 트렁크 립과 보닛 라인 같은 최소한의 선으로만 입체감을 낸다.
  */
-private fun DrawScope.drawSedan(center: Offset, cw: Float, curve: Float, time: Float, playing: Boolean) {
+internal fun DrawScope.drawSedan(center: Offset, cw: Float, curve: Float, time: Float, playing: Boolean) {
     val ch = cw * 2.0f // 위에서 보므로 앞뒤 길이가 길게 보인다
     val bounce = if (playing) sin(time * 2f * PI.toFloat() * 1.1f) * ch * 0.003f else 0f
     val cx = center.x

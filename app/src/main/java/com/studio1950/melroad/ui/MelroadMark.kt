@@ -128,7 +128,7 @@ private fun DrawScope.drawMelroadMark() {
  * 화면 낭독기에서는 '멜로드' 제목 하나로 읽힌다.
  */
 @Composable
-fun MelroadBrand(name: String, wordmark: String, modifier: Modifier = Modifier, markSize: Dp = 64.dp) {
+fun MelroadBrand(name: String, wordmark: String, modifier: Modifier = Modifier, markSize: Dp = 64.dp, textColor: Color = HyundaiBlue) {
     val reducedMotion = rememberReducedMotion()
     val reveal = remember { Animatable(if (reducedMotion) 1f else 0f) }
     LaunchedEffect(Unit) {
@@ -152,7 +152,7 @@ fun MelroadBrand(name: String, wordmark: String, modifier: Modifier = Modifier, 
             wordmark,
             style = MaterialTheme.typography.titleLarge.copy(letterSpacing = 0.30.em),
             fontWeight = FontWeight.SemiBold,
-            color = HyundaiBlue,
+            color = textColor,
         )
     }
 }
