@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -9,7 +11,7 @@ plugins {
 
 // release 서명 정보는 저장소 밖에 두고 프로젝트 루트의 keystore.properties(.gitignore 대상)로만 읽는다.
 // 파일이 없으면 서명하지 않은 release APK가 만들어진다. 형식은 keystore.properties.example 참고.
-val signingProps = java.util.Properties().apply {
+val signingProps = Properties().apply {
     val f = rootProject.file("keystore.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
