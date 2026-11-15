@@ -452,9 +452,12 @@ class TripSessionController(
      * 화면의 3D 장면용 값(속도·굽이·오르내림). 최근 4초 원본 샘플로 계산하고 단계를 나눠 불필요한 갱신을 줄인다.
      * 음악·저장에는 쓰지 않는다. 위치 신호가 없으면(LIVE 속도 기반) 굽이·오르내림은 0으로 둔다.
      */
-    private fun sceneAt(ph: Long): FloatArray {
+    /** 화면 장면 표시용 값. 저장하지 않으며, 신호가 없으면 0 또는 null로 둬서 없는 굽이·방위를 지어내지 않는다. */
+    private data class Scene(val speedKmh: Float, val curve: Float, val climb: Float, val headingDeg: Float?)
+
+    private fun sceneAt(ph: Long): Scene {
         val samples = source?.samplesBetween(ph - 4_000L, ph).orEmpty()
-        if (samples.isEmpty()) return floatArrayOf(0f, 0f, 0f)
+        if (samples.isEmpty()) return Scene(0f, 0f, 0f, null)
         val speed = (samples.lastOrNull { it.speedMps != null }?.speedMps ?: 0f) * 3.6f
         val bearings = samples.mapNotNull { it.bearingDeg }
         val curve = if (bearings.size >= 2) {
@@ -467,10 +470,13 @@ class TripSessionController(
         }
         val altitudes = samples.mapNotNull { it.altitudeM }
         val climb = if (altitudes.size >= 2) ((altitudes.last() - altitudes.first()) / 5.0).toFloat().coerceIn(-1f, 1f) else 0f
-        return floatArrayOf(
+        // 방위는 1도 단위로만 갱신해 불필요한 화면 갱신을 줄인다.
+        val heading = bearings.lastOrNull()?.let { ((Math.round(it) % 360) + 360) % 360 }?.toFloat()
+        return Scene(
             Math.round(speed).toFloat(),
             Math.round(curve * 20f) / 20f,
             Math.round(climb * 10f) / 10f,
+            heading,
         )
     }
 
@@ -517,16 +523,18 @@ class TripSessionController(
         val scene = sceneAt(ph)
         val cur = _state.value
         if (ph / 1000 != cur.elapsedMs / 1000 || density != cur.density || section != cur.section ||
-            scene[0] != cur.sceneSpeedKmh || scene[1] != cur.sceneCurve || scene[2] != cur.sceneClimb
+            scene.speedKmh != cur.sceneSpeedKmh || scene.curve != cur.sceneCurve || scene.climb != cur.sceneClimb ||
+            scene.headingDeg != cur.sceneHeadingDeg
         ) {
             _state.update {
                 it.copy(
                     elapsedMs = ph,
                     density = density,
                     section = section,
-                    sceneSpeedKmh = scene[0],
-                    sceneCurve = scene[1],
-                    sceneClimb = scene[2],
+                    sceneSpeedKmh = scene.speedKmh,
+                    sceneCurve = scene.curve,
+                    sceneClimb = scene.climb,
+                    sceneHeadingDeg = scene.headingDeg,
                 )
             }
         }

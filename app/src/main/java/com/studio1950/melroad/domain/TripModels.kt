@@ -68,6 +68,8 @@ data class SessionState(
     val sceneSpeedKmh: Float = 0f,
     val sceneCurve: Float = 0f,
     val sceneClimb: Float = 0f,
+    /** 진행 방향(0=북, 시계 방향 도). 방향 신호가 있을 때만 값이 있고, 속도만 있으면 null이라 방위를 표시하지 않는다. */
+    val sceneHeadingDeg: Float? = null,
     val pausedByFocus: Boolean = false,
     val draft: TripDraft? = null,
     val savedTripId: Long? = null,

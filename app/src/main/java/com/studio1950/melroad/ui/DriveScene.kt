@@ -25,7 +25,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import com.studio1950.melroad.ui.theme.ActiveBlue
-import com.studio1950.melroad.ui.theme.HyundaiBlue
 import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.min
@@ -42,7 +41,7 @@ val SceneBackground = Color(0xFFEEF2F6)
  * @param speedKmh 차선이 흐르는 속도(표시용, 실제 속도의 일부만 반영)
  * @param curve -1(왼쪽)..1(오른쪽) 도로가 휘는 정도
  * @param climb -1(내리막)..1(오르막) 시점 높이를 살짝 바꾼다
- * @param playing 음악 재생 중이면 경로가 은은하게 빛나고 음파 링이 퍼진다
+ * @param playing 음악 재생 중이면 경로 리본 위로 빛이 앞으로 흘러간다
  */
 @Composable
 fun DriveScene(
@@ -50,7 +49,6 @@ fun DriveScene(
     curve: Float,
     climb: Float,
     playing: Boolean,
-    density: Int,
     modifier: Modifier = Modifier,
 ) {
     val curveAnim by animateFloatAsState(curve, spring(stiffness = Spring.StiffnessVeryLow), label = "curve")
@@ -80,14 +78,13 @@ fun DriveScene(
         val h = size.height
         drawRect(SceneBackground)
         val view = View(w, h, vanishY = -h * (0.25f + climbAnim * 0.06f), curve = curveAnim)
-        drawLanes(view, phase, playing, time)
+        drawRoad(view, phase, playing, time)
         // 자동차는 항상 가운데 차선 중심에 놓는다(그 거리에서의 도로 중심을 투영으로 계산)
         val carY = h * 0.70f
         val carD = (h - view.vanishY) / (carY - view.vanishY)
         val carCenter = Offset(view.at(carD).first, carY)
         // 모형처럼 작게: 도로 폭 대비 차 폭이 과하지 않도록 한다.
         val carWidth = min(w * 0.095f, h * 0.13f)
-        drawRings(carCenter, carWidth, playing, time, density)
         drawSedan(carCenter, carWidth, curveAnim, if (playing) time else 0f, playing)
         // 바깥쪽 페이드아웃: 자동차 주변만 남긴다
         val radius = max(w, h) * 0.62f
@@ -113,81 +110,86 @@ private class View(val w: Float, val h: Float, val vanishY: Float, val curve: Fl
     }
 }
 
-/** 3차선 도로: 바깥 실선, 안쪽 점선, 가운데 차선에 경로 리본 */
-private fun DrawScope.drawLanes(v: View, phase: Float, playing: Boolean, time: Float) {
-    val laneHalf = v.w * 0.17f // 차선 하나의 반폭(화면 아래 기준)
+/**
+ * 3차선 도로. 모든 면과 선을 원근(거리 d에 반비례하는 폭)으로 그려 평면 그림처럼 보이지 않게 한다.
+ * 갓길 → 연석 → 노면(바퀴 자국) → 가운데 차선 경로 리본(테두리·흐르는 빛) → 차선 순서로 쌓는다.
+ */
+private fun DrawScope.drawRoad(v: View, phase: Float, playing: Boolean, time: Float) {
+    val lane = v.w * 0.17f // 차선 하나의 반폭(화면 아래 기준). 차선 경계는 ±1, ±3
     val far = 14f
-    val ds = (0..40).map { i -> far.pow(i / 40f) }
 
-    fun strip(left: Float, right: Float): Path {
+    /** 가로 위치 left..right(차선 반폭 단위)를 거리 dFrom..dTo 구간에서 채우는 원근 면 */
+    fun band(left: Float, right: Float, dFrom: Float = 1f, dTo: Float = far, steps: Int = 40): Path {
         val p = Path()
-        ds.forEachIndexed { i, d ->
+        for (i in 0..steps) {
+            val d = dFrom * (dTo / dFrom).pow(i / steps.toFloat())
             val (cx, y) = v.at(d)
-            if (i == 0) p.moveTo(cx + left * laneHalf / d, y) else p.lineTo(cx + left * laneHalf / d, y)
+            val x = cx + left * lane / d
+            if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
         }
-        ds.asReversed().forEach { d ->
+        for (i in steps downTo 0) {
+            val d = dFrom * (dTo / dFrom).pow(i / steps.toFloat())
             val (cx, y) = v.at(d)
-            p.lineTo(cx + right * laneHalf / d, y)
+            p.lineTo(cx + right * lane / d, y)
         }
         p.close()
         return p
     }
+    fun nearToFar(near: Color, farColor: Color) = Brush.verticalGradient(listOf(farColor, near), startY = 0f, endY = v.h)
 
-    // 노면(아주 옅은 회색)
-    drawPath(strip(-3.2f, 3.2f), Color(0xFFDDE3EA))
-    // 경로 리본(가운데 차선)
-    val glow = if (playing) 0.30f + 0.08f * sin(time * 2f * PI.toFloat() / 2.4f) else 0.24f
-    drawPath(strip(-0.8f, 0.8f), Brush.verticalGradient(listOf(ActiveBlue.copy(alpha = 0.04f), ActiveBlue.copy(alpha = glow)), startY = 0f, endY = v.h))
-
-    // 바깥 실선
-    for (side in listOf(-3f, 3f)) {
-        val p = Path()
-        ds.forEachIndexed { i, d ->
-            val (cx, y) = v.at(d)
-            val x = cx + side * laneHalf / d
-            if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
-        }
-        drawPath(p, Color(0xFFB4BFCC), style = Stroke(width = v.w * 0.005f, cap = StrokeCap.Round))
+    // 갓길과 연석(노면보다 살짝 밝은 갓길, 그 안쪽의 얇은 그늘)
+    for (side in listOf(-1f, 1f)) {
+        drawPath(band(side * 3.2f, side * 4.1f), nearToFar(Color(0xFFE2E7ED), Color(0xFFEAEEF2)))
+        drawPath(band(side * 3.2f, side * 3.34f), Color(0xFFC5CED9))
     }
-    // 안쪽 점선(흐름)
+    // 노면: 가까울수록 조금 짙고 멀수록 안개처럼 옅어진다
+    drawPath(band(-3.2f, 3.2f), nearToFar(Color(0xFFD2D9E2), Color(0xFFE5EAEF)))
+    // 옆 차선의 옅은 바퀴 자국
+    for (center in listOf(-2f, 2f)) {
+        for (offset in listOf(-0.45f, 0.45f)) {
+            drawPath(band(center + offset - 0.10f, center + offset + 0.10f), Color(0xFFC9D1DB).copy(alpha = 0.45f))
+        }
+    }
+
+    // 경로 리본(가운데 차선): 차 앞에서 가장 진하고 멀어질수록 사라진다
+    val glow = if (playing) 0.34f + 0.06f * sin(time * 2f * PI.toFloat() / 2.4f) else 0.26f
+    drawPath(band(-0.9f, 0.9f), Brush.verticalGradient(listOf(ActiveBlue.copy(alpha = 0.02f), ActiveBlue.copy(alpha = glow)), startY = 0f, endY = v.h))
+    for (side in listOf(-1f, 1f)) {
+        drawPath(
+            band(side * 0.84f, side * 0.92f),
+            Brush.verticalGradient(listOf(ActiveBlue.copy(alpha = 0f), ActiveBlue.copy(alpha = 0.65f)), startY = 0f, endY = v.h),
+        )
+    }
+    // 재생 중: 리본 위로 은은한 빛 띠가 앞으로 흘러간다
+    if (playing) {
+        for (k in 0 until 3) {
+            val u = ((time * 0.16f + k / 3f) % 1f)
+            val d0 = far.pow(u * 0.8f)
+            val d1 = d0 * 1.35f
+            // 띠의 앞뒤 끝이 부드럽게 사라지도록 세로 그라데이션으로 채운다.
+            val yNear = v.at(d0).second
+            val yFar = v.at(d1).second
+            val a = 0.30f * (1f - u) * (1f - u)
+            drawPath(
+                band(-0.84f, 0.84f, d0, d1, steps = 10),
+                Brush.verticalGradient(listOf(Color.White.copy(alpha = 0f), Color.White.copy(alpha = a), Color.White.copy(alpha = 0f)), startY = yFar, endY = yNear),
+            )
+        }
+    }
+
+    // 바깥 실선(흰색, 원근 폭)
+    for (side in listOf(-3f, 3f)) {
+        drawPath(band(side - 0.05f, side + 0.05f), Color.White)
+    }
+    // 안쪽 점선(속도에 맞춰 흐름)
     for (side in listOf(-1f, 1f)) {
         var d0 = 1f + ((2f - (phase % 2f)) % 2f) - 2f
         while (d0 < far) {
             val dA = max(d0, 1f)
             val dB = d0 + 0.9f
-            if (dB > 1f) {
-                val (xa, ya) = v.at(dA)
-                val (xb, yb) = v.at(dB)
-                drawLine(
-                    Color(0xFFB4BFCC),
-                    Offset(xa + side * laneHalf / dA, ya),
-                    Offset(xb + side * laneHalf / dB, yb),
-                    strokeWidth = v.w * 0.005f,
-                    cap = StrokeCap.Round,
-                )
-            }
+            if (dB > 1f) drawPath(band(side - 0.045f, side + 0.045f, dA, dB, steps = 6), Color.White)
             d0 += 2f
         }
-    }
-}
-
-private fun DrawScope.drawRings(center: Offset, carWidth: Float, playing: Boolean, time: Float, density: Int) {
-    if (!playing) return
-    val period = when (density) {
-        0 -> 3.2f
-        1 -> 2.6f
-        2 -> 2.1f
-        else -> 1.8f
-    }
-    for (i in 0 until 3) {
-        val p = ((time / period) + i / 3f) % 1f
-        val rw = carWidth * (0.9f + p * 2.2f)
-        drawOval(
-            ActiveBlue.copy(alpha = (1f - p) * 0.35f),
-            topLeft = Offset(center.x - rw, center.y - rw * 0.32f),
-            size = Size(rw * 2f, rw * 0.64f),
-            style = Stroke(width = carWidth * 0.02f),
-        )
     }
 }
 
@@ -207,24 +209,14 @@ private fun DrawScope.drawSedan(center: Offset, cw: Float, curve: Float, time: F
     // 바닥 그림자: 넓게 번지는 그림자 + 차체 바로 아래 짙은 접지 그림자(빛은 왼쪽 위에서 온다고 가정)
     drawOval(
         Brush.radialGradient(
-            0f to HyundaiBlue.copy(alpha = 0.16f),
-            0.6f to HyundaiBlue.copy(alpha = 0.05f),
+            0f to Color(0xFF0B1F3A).copy(alpha = 0.18f),
+            0.7f to Color(0xFF0B1F3A).copy(alpha = 0.06f),
             1f to Color.Transparent,
-            center = Offset(x(0.04f), yAt(0.46f)),
-            radius = ch * 0.62f,
+            center = Offset(x(0.03f), yAt(0.48f)),
+            radius = cw * 0.58f,
         ),
-        topLeft = Offset(x(-0.70f), yAt(1.08f)),
-        size = Size(cw * 1.48f, ch * 1.22f),
-    )
-    drawOval(
-        Brush.radialGradient(
-            0f to Color(0xFF0B1F3A).copy(alpha = 0.22f),
-            1f to Color.Transparent,
-            center = Offset(x(0.02f), yAt(0.48f)),
-            radius = cw * 0.62f,
-        ),
-        topLeft = Offset(x(-0.56f), yAt(1.02f)),
-        size = Size(cw * 1.14f, ch * 1.06f),
+        topLeft = Offset(x(-0.53f), yAt(1.00f)),
+        size = Size(cw * 1.08f, ch * 1.02f),
     )
 
     rotate(curve * 4f, pivot = Offset(cx, yAt(0.5f))) {

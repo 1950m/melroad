@@ -52,7 +52,6 @@ fun SceneCard(
     curve: Float,
     climb: Float = 0f,
     playing: Boolean = false,
-    density: Int = 1,
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     val shape = RoundedCornerShape(40.dp)
@@ -62,7 +61,7 @@ fun SceneCard(
             .clip(shape)
             .border(1.dp, Color.White, shape),
     ) {
-        DriveScene(speedKmh, curve, climb, playing, density, Modifier.fillMaxSize())
+        DriveScene(speedKmh, curve, climb, playing, Modifier.fillMaxSize())
         overlay()
     }
 }
@@ -166,7 +165,6 @@ fun PrepareScreen(
         SectionCard {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(stringResource(R.string.prepare_demo_title), style = MaterialTheme.typography.titleLarge)
-                Badge(stringResource(R.string.badge_simulation), emphasized = true)
             }
             SubtleText(stringResource(R.string.prepare_demo_desc))
             for (fixture in DriveFixtures.all) {

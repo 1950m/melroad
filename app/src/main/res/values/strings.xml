@@ -28,8 +28,6 @@
 
     <!-- S03 여행 중 -->
     <string name="badge_simulation">시뮬레이션</string>
-    <string name="badge_live_speed">실제 주행 · 속도 기반</string>
-    <string name="badge_live">실제 주행</string>
     <string name="running_status">재생 중</string>
     <string name="running_paused">일시정지</string>
     <string name="running_finalizing">마무리 중</string>
@@ -49,14 +47,13 @@
     <string name="label_progress">진행</string>
     <string name="label_music">지금 음악</string>
     <string name="label_signal">음악의 재료</string>
-    <string name="signal_simulation">시뮬레이션 데이터</string>
     <string name="signal_speed">차량 속도 신호</string>
     <string name="label_length">길이</string>
     <string name="signal_lost">차량 신호 끊김</string>
     <string name="signal_error">차량 신호 없음</string>
     <string name="action_pause">일시정지</string>
     <string name="action_resume">다시 재생</string>
-    <string name="action_finish_trip">여행 마치기</string>
+    <string name="action_finish_trip">종료</string>
 
     <!-- S04 여행 종료 -->
     <string name="finished_title">완료</string>
@@ -116,4 +113,15 @@
 
     <string name="title_demo_trip">%1$s (시뮬레이션)</string>
     <string name="title_live_trip">%1$s 실제 주행</string>
+    <string name="compass_desc">진행 방향 %1$s쪽</string>
+    <string-array name="compass_directions">
+        <item>북</item>
+        <item>북동</item>
+        <item>동</item>
+        <item>남동</item>
+        <item>남</item>
+        <item>남서</item>
+        <item>서</item>
+        <item>북서</item>
+    </string-array>
 </resources>

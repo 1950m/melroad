@@ -149,15 +149,9 @@ fun RunningScreen(
     BoxWithConstraints(Modifier.fillMaxSize().padding(28.dp)) {
         val wide = maxWidth > 840.dp
         val scene = @Composable { mod: Modifier ->
-            SceneCard(mod, s.sceneSpeedKmh, s.sceneCurve, s.sceneClimb, playing, s.density) {
-                Box(Modifier.align(Alignment.TopStart).padding(22.dp)) {
-                    if (s.source == TripSource.DEMO) {
-                        Badge(stringResource(R.string.badge_simulation), emphasized = true)
-                    } else {
-                        val speedOnly = s.liveCapability?.speedOnly == true
-                        Badge(stringResource(if (speedOnly) R.string.badge_live_speed else R.string.badge_live), emphasized = false)
-                    }
-                }
+            SceneCard(mod, s.sceneSpeedKmh, s.sceneCurve, s.sceneClimb, playing) {
+                // 방향 신호가 있을 때만 방위를 보인다(속도만 있는 실제 주행에서는 표시하지 않음).
+                s.sceneHeadingDeg?.let { HeadingCompass(it, Modifier.align(Alignment.TopStart).padding(22.dp)) }
             }
         }
         val panel = @Composable { mod: Modifier ->
@@ -171,8 +165,10 @@ fun RunningScreen(
                         style = MaterialTheme.typography.titleLarge,
                         color = Color.White,
                     )
-                    Spacer(Modifier.weight(1f))
-                    PanelChip(stringResource(if (s.source == TripSource.DEMO) R.string.signal_simulation else R.string.signal_speed))
+                    if (s.source == TripSource.LIVE) {
+                        Spacer(Modifier.weight(1f))
+                        PanelChip(stringResource(R.string.signal_speed))
+                    }
                 }
                 if (s.source == TripSource.LIVE) {
                     when (s.signalStatus) {
