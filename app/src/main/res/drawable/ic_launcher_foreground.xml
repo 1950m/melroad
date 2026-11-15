@@ -1,16 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 자체 제작 멜로드 심볼: 빛을 향해 멀어지는 길과 그 가운데를 흐르는 선율 물결(앱 안 MelroadMark와 같은 형태) -->
+<!-- 자체 제작 멜로드 심볼: 소리 물결 지평선 위로 떠오르는 해와 그 해를 향한 길(앱 안 MelroadMark와 같은 형태) -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:fillColor="#1FFFFFFF" android:pathData="M36.00,72.72 L52.56,38.88 L55.44,38.88 L72.00,72.72 Z" />
-    <path android:fillColor="#00000000" android:strokeColor="#E6FFFFFF" android:strokeWidth="2.2" android:strokeLineCap="round" android:pathData="M36.00,72.72 L52.56,38.88" />
-    <path android:fillColor="#00000000" android:strokeColor="#E6FFFFFF" android:strokeWidth="2.2" android:strokeLineCap="round" android:pathData="M72.00,72.72 L55.44,38.88" />
-    <path android:fillColor="#00000000" android:strokeColor="#FF00AAD2" android:strokeWidth="3.9" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M54.00,74.16 L57.12,73.66 L58.96,73.17 L60.06,72.67 L60.53,72.17 L60.48,71.68 L59.98,71.18 L59.13,70.68 L58.03,70.19 L56.77,69.69 L55.44,69.19 L54.11,68.70 L52.87,68.20 L51.75,67.70 L50.82,67.20 L50.09,66.71 L49.58,66.21 L49.29,65.71 L49.23,65.22 L49.38,64.72 L49.71,64.22 L50.19,63.73 L50.79,63.23 L51.48,62.73 L52.22,62.24" />
-    <path android:fillColor="#00000000" android:strokeColor="#FF7FD4E8" android:strokeWidth="2.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M51.24,62.90 L51.97,62.40 L52.73,61.91 L53.49,61.41 L54.21,60.91 L54.87,60.42 L55.46,59.92 L55.95,59.42 L56.33,58.92 L56.61,58.43 L56.77,57.93 L56.82,57.43 L56.77,56.94 L56.63,56.44 L56.42,55.94 L56.14,55.45 L55.81,54.95 L55.46,54.45 L55.09,53.96 L54.72,53.46 L54.36,52.96 L54.03,52.47 L53.74,51.97 L53.49,51.47 L53.29,50.98" />
-    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M53.57,51.64 L53.37,51.20 L53.21,50.76 L53.09,50.31 L53.01,49.87 L52.97,49.43 L52.96,48.99 L52.99,48.55 L53.04,48.11 L53.11,47.66 L53.20,47.22 L53.30,46.78 L53.41,46.34 L53.52,45.90 L53.62,45.46 L53.72,45.01 L53.81,44.57 L53.88,44.13 L53.94,43.69 L53.98,43.25 L54.01,42.81 L54.02,42.36 L54.02,41.92 L54.01,41.48 L54.00,41.04" />
-    <path android:fillColor="#40FFFFFF" android:pathData="M47.50,35.28 a6.5,6.5 0 1,0 13.0,0 a6.5,6.5 0 1,0 -13.0,0" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="M51.40,35.28 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0" />
+    <path android:fillColor="#3300AAD2" android:pathData="M34.20,55.98 A19.80,19.80 0 0,1 73.80,55.98 Z" />
+    <path android:fillColor="#FFE3F6FB" android:pathData="M41.46,55.98 A12.54,12.54 0 0,1 66.54,55.98 Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.9" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M30.90,55.98 L31.86,56.02 L32.83,56.13 L33.79,56.27 L34.75,56.39 L35.71,56.45 L36.67,56.41 L37.64,56.25 L38.60,55.98 L39.56,55.64 L40.52,55.30 L41.49,55.02 L42.45,54.86 L43.41,54.88 L44.38,55.09 L45.34,55.48 L46.30,55.98 L47.26,56.52 L48.23,57.01 L49.19,57.37 L50.15,57.51 L51.11,57.42 L52.08,57.09 L53.04,56.58 L54.00,55.98 L54.96,55.38 L55.92,54.87 L56.89,54.54 L57.85,54.45 L58.81,54.59 L59.77,54.95 L60.74,55.44 L61.70,55.98 L62.66,56.48 L63.62,56.87 L64.59,57.08 L65.55,57.10 L66.51,56.94 L67.47,56.66 L68.44,56.32 L69.40,55.98 L70.36,55.71 L71.32,55.55 L72.29,55.51 L73.25,55.57 L74.21,55.69 L75.17,55.83 L76.14,55.94 L77.10,55.98" />
+    <path android:fillColor="#00000000" android:strokeColor="#E6FFFFFF" android:strokeWidth="2.0" android:strokeLineCap="round" android:pathData="M51.69,58.95 L42.12,76.44" />
+    <path android:fillColor="#00000000" android:strokeColor="#E6FFFFFF" android:strokeWidth="2.0" android:strokeLineCap="round" android:pathData="M56.31,58.95 L65.88,76.44" />
+    <path android:fillColor="#00000000" android:strokeColor="#FF00AAD2" android:strokeWidth="1.6" android:strokeLineCap="round" android:pathData="M54.00,62.58 L54.00,65.22 M54.00,67.86 L54.00,71.16 M54.00,73.80 L54.00,77.76" />
 </vector>

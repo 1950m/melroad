@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -69,13 +70,17 @@ fun SceneCard(
 }
 
 /**
- * S01 첫 화면: 주행 장면을 화면 가득 크게 깔고, 위쪽 가운데에 멜로드 로고, 아래쪽에 큰 버튼 세 개를 얹는다.
- * 버튼 뒤에는 옅은 흰빛을 깔아 장면 위에서도 글자 대비를 유지한다.
+ * S01 첫 화면. 주행 장면을 화면 가득 깔고 글자 버튼 없이 아이콘으로만 둔다.
+ * - 왼쪽 위: 멜로드 심볼과 이름 / 오른쪽 위: 정보(i)
+ * - 아래 가운데: 숨 쉬는 빛을 두른 큰 재생 버튼(여행 시작), 그 오른쪽에 뮤직박스(재생 목록) 버튼
+ * 아이콘 버튼은 화면 낭독기가 '여행 시작', '뮤직박스', '정보'로 읽는다.
  */
 @Composable
 fun HomeScreen(onStartTrip: () -> Unit, onOurMusic: () -> Unit, onInfo: () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth > 840.dp
+        val playSize = if (wide) 156.dp else 128.dp
+        val sideSize = if (wide) 100.dp else 84.dp
         DriveScene(
             speedKmh = 30f,
             curve = 0.15f,
@@ -83,41 +88,48 @@ fun HomeScreen(onStartTrip: () -> Unit, onOurMusic: () -> Unit, onInfo: () -> Un
             playing = false,
             modifier = Modifier.fillMaxSize(),
             carYFraction = if (wide) 0.56f else 0.50f,
-            carScale = 0.72f,
+            carScale = 0.66f,
         )
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .fillMaxHeight(if (wide) 0.34f else 0.46f)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xFFEDF1F6).copy(alpha = 0.95f)))),
+                .fillMaxHeight(0.36f)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xFFEDF1F6).copy(alpha = 0.92f)))),
         )
-        MelroadLogo(
+        MelroadBrand(
             name = stringResource(R.string.app_name),
             wordmark = stringResource(R.string.brand),
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 44.dp),
+            modifier = Modifier.align(Alignment.TopStart).padding(start = 40.dp, top = 36.dp),
+            markSize = if (wide) 68.dp else 56.dp,
         )
-        if (wide) {
-            Row(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .widthIn(max = 1500.dp)
-                    .fillMaxWidth()
-                    .padding(horizontal = 48.dp, vertical = 40.dp),
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-            ) {
-                BigButton(stringResource(R.string.action_start_trip), onStartTrip, Modifier.weight(1.4f), icon = IconKind.PLAY)
-                BigButton(stringResource(R.string.action_our_music), onOurMusic, Modifier.weight(1f), primary = false)
-                BigButton(stringResource(R.string.action_info), onInfo, Modifier.weight(1f), primary = false)
+        RoundIconButton(
+            RoundIcon.INFO,
+            description = stringResource(R.string.action_info),
+            size = 76.dp,
+            onClick = onInfo,
+            modifier = Modifier.align(Alignment.TopEnd).padding(end = 40.dp, top = 32.dp),
+        )
+        Row(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(bottom = if (wide) 44.dp else 32.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Spacer(Modifier.weight(1f))
+            Box(contentAlignment = Alignment.Center) {
+                BreathingGlow(playSize * 1.7f)
+                RoundIconButton(RoundIcon.PLAY, stringResource(R.string.action_start_trip), playSize, onStartTrip, primary = true)
             }
-        } else {
-            Column(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(28.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-            ) {
-                BigButton(stringResource(R.string.action_start_trip), onStartTrip, icon = IconKind.PLAY)
-                BigButton(stringResource(R.string.action_our_music), onOurMusic, primary = false)
-                BigButton(stringResource(R.string.action_info), onInfo, primary = false)
+            Box(Modifier.weight(1f)) {
+                RoundIconButton(
+                    RoundIcon.PLAYLIST,
+                    description = stringResource(R.string.action_our_music),
+                    size = sideSize,
+                    onClick = onOurMusic,
+                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp),
+                )
             }
         }
     }

@@ -10,16 +10,13 @@ NAMES = {'C':0,'C#':1,'Db':1,'D':2,'D#':3,'Eb':3,'E':4,'F':5,'F#':6,'Gb':6,'G':7
 
 # 묶음: (경로 패턴, 최대 길이 초, 페이드 초, 목표 RMS dBFS)
 BANKS = {
-    'piano':  ('Keys/Upright Piano/', 4.5, 0.6, -20),
-    'violins':('Strings/Violin Section/susVib/', 4.5, 0.4, -20),
-    'violas': ('Strings/Viola Section/susvib/', 4.5, 0.4, -20),
-    'cellos': ('Strings/Cello Section/susvib/', 4.5, 0.4, -20),
-    'pizz':   ('Strings/Cello Section/pizzT/', 1.6, 0.3, -20),
-    'harp':   ('Strings/Harp/', 3.5, 0.6, -20),
-    'flute':  ('Woodwinds/Flute/expvib/', 4.0, 0.4, -20),
-    'horn':   ('Brass/F Horn/sus/', 4.0, 0.4, -20),
-    'timphit':('Percussion/Timpani/Timpani', 3.0, 0.6, -20),
-    'timproll':('Percussion/Timpani/Rolls/', 4.5, 0.6, -22),
+    'piano':  ('Keys/Upright Piano/', 3.4, 0.6, -20),
+    'violins':('Strings/Violin Section/susVib/', 3.2, 0.4, -20),
+    'violas': ('Strings/Viola Section/susvib/', 3.2, 0.4, -20),
+    'cellos': ('Strings/Cello Section/susvib/', 3.2, 0.4, -20),
+    'pizz':   ('Strings/Cello Section/pizzT/', 1.4, 0.3, -20),
+    'harp':   ('Strings/Harp/', 2.8, 0.6, -20),
+    'timproll':('Percussion/Timpani/Rolls/', 4.0, 0.6, -22),
 }
 
 def load(path):

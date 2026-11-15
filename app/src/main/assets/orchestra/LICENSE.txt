@@ -5,7 +5,7 @@ MELROAD 오케스트라 샘플 출처
 - Versilian Studios Chamber Orchestra 2 Community Edition (VSCO 2 CE)
   https://github.com/sgossner/VSCO-2-CE
   라이선스: CC0 1.0 Universal (퍼블릭 도메인 헌정)
-  사용: 바이올린·비올라·첼로 합주(지속음), 첼로 피치카토, 하프, 플루트, 호른, 팀파니
+  사용: 바이올린·비올라·첼로 합주(지속음), 첼로 피치카토, 하프, 팀파니 롤
 
 - Upright Piano — Simon Dalzell / Ivy Audio (VSCO 2 CE 포함)
   원본 안내: "Bearer is granted right to redistribute this sample set by Versilian Studios LLC.
