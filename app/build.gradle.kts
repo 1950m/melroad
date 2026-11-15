@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    // 에뮬레이터 없이 화면을 그려 확인하는 스크린샷 테스트(테스트 전용, 앱에는 포함되지 않음)
+    alias(libs.plugins.paparazzi)
 }
 
 android {
@@ -76,4 +78,22 @@ dependencies {
     implementation(libs.pleos.vehicle)
 
     testImplementation(libs.junit)
+}
+
+// Paparazzi(LayoutLib)는 Guava의 -jre 변형을 쓰는데, 앱은 -android 변형을 쓴다. 테스트 경로에서만 -jre를 고르게 한다.
+// 출처: Paparazzi 변경 기록(https://cashapp.github.io/paparazzi/changelog)의 안내.
+plugins.withId("app.cash.paparazzi") {
+    afterEvaluate {
+        dependencies.constraints {
+            add("testImplementation", "com.google.guava:guava") {
+                attributes {
+                    attribute(
+                        TargetJvmEnvironment.TARGET_JVM_ENVIRONMENT_ATTRIBUTE,
+                        objects.named(TargetJvmEnvironment::class.java, TargetJvmEnvironment.STANDARD_JVM),
+                    )
+                }
+                because("LayoutLib and sdk-common depend on Guava's -jre published variant.")
+            }
+        }
+    }
 }

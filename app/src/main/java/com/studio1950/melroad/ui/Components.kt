@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -61,9 +62,11 @@ enum class IconKind { PLAY, PAUSE, STOP, BACK, NONE }
 /** 기기 접근성 설정에서 애니메이션을 끈 경우 true. 이때는 장식용 움직임(빛망울·배경 빛 흐름)을 멈춘다. */
 @Composable
 fun rememberReducedMotion(): Boolean {
+    // 미리보기·스크린샷 테스트에서는 움직임 없이 완성된 모습을 그린다.
+    if (LocalInspectionMode.current) return true
     val context = LocalContext.current
     return remember {
-        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+        runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false)
     }
 }
 

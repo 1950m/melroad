@@ -87,15 +87,17 @@ fun HomeScreen(onStartTrip: () -> Unit, onOurMusic: () -> Unit, onInfo: () -> Un
             climb = 0f,
             playing = false,
             modifier = Modifier.fillMaxSize(),
-            carYFraction = if (wide) 0.56f else 0.50f,
-            carScale = 0.66f,
+            carYFraction = if (wide) 0.58f else 0.52f,
+            carScale = 0.62f,
+            palette = ScenePalette.DAWN,
+            horizonFraction = 0.24f,
         )
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .fillMaxHeight(0.36f)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xFFEDF1F6).copy(alpha = 0.92f)))),
+                .fillMaxHeight(0.30f)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xFFEDF1F6).copy(alpha = 0.55f)))),
         )
         MelroadBrand(
             name = stringResource(R.string.app_name),

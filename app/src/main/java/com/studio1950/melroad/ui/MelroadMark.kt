@@ -123,8 +123,8 @@ private fun DrawScope.drawMelroadMark() {
  */
 @Composable
 fun MelroadBrand(name: String, wordmark: String, modifier: Modifier = Modifier, markSize: Dp = 64.dp) {
-    val reveal = remember { Animatable(0f) }
     val reducedMotion = rememberReducedMotion()
+    val reveal = remember { Animatable(if (reducedMotion) 1f else 0f) }
     LaunchedEffect(Unit) {
         if (reducedMotion) reveal.snapTo(1f) else reveal.animateTo(1f, tween(1400, delayMillis = 200, easing = FastOutSlowInEasing))
     }

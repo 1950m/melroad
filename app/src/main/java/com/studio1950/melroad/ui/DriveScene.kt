@@ -40,6 +40,24 @@ import kotlin.math.sin
 val SceneBackground = Color(0xFFEEF2F6)
 
 /**
+ * 장면 색감. DAY는 주행·종료 화면용(밝고 차분함), DAWN은 첫 화면용으로 하늘빛이 더 깊고
+ * 길 끝이 따뜻한 흰빛(현대 Light Sand)이며 가장자리가 은은하게 가라앉아 시선이 길 끝과 버튼으로 모인다.
+ */
+enum class ScenePalette(
+    val skyTop: Color,
+    val skyMid: Color,
+    val ground: Color,
+    val glowMid: Color,
+    val glowRadius: Float,
+    val roadNear: Color,
+    val roadFar: Color,
+    val vignette: Color,
+) {
+    DAY(Color(0xFFDDE8F3), Color(0xFFF2F5F9), SceneBackground, Color(0xFFF6F3F2), 0.62f, Color(0xFFD2D9E2), Color(0xFFE5EAEF), Color.Transparent),
+    DAWN(Color(0xFF9DBEE2), Color(0xFFE6EEF7), Color(0xFFE2E9F1), Color(0xFFF6F3F2), 0.50f, Color(0xFFC7D2DF), Color(0xFFE3E9F0), Color(0xFF3D5F86)),
+}
+
+/**
  * 장식용 주행 장면: 위에서 비스듬히 내려다본 차선과 단순한 세단 뒷모습.
  * 자동차 주변만 보이고 바깥은 하늘빛 바탕으로 사라진다. 길 끝의 빛과 천천히 스치는 빛망울로 분위기를 낸다.
  * 길 안내·지도 기능이 아니며 화면 낭독기에서는 숨긴다. 기기에서 애니메이션을 끄면 빛망울은 그리지 않는다.
@@ -50,6 +68,9 @@ val SceneBackground = Color(0xFFEEF2F6)
  * @param playing 음악 재생 중이면 경로 리본 위로 빛이 앞으로 흘러간다
  * @param carYFraction 자동차를 놓을 세로 위치(화면 높이 비율). 첫 화면처럼 아래에 버튼이 겹치면 위로 올린다.
  * @param carScale 자동차 크기 배율. 화면 가득 그리는 첫 화면에서는 작게 줄여 모형처럼 보이게 한다.
+ * @param palette 장면 색감([ScenePalette])
+ * @param horizonFraction 지평선 높이(화면 높이 비율). null이면 소실점을 화면 위로 두어 길만 보이게 하고,
+ *   값을 주면 지평선과 하늘·땅이 보이는 넓은 구도가 된다(첫 화면).
  */
 @Composable
 fun DriveScene(
@@ -60,6 +81,8 @@ fun DriveScene(
     modifier: Modifier = Modifier,
     carYFraction: Float = 0.70f,
     carScale: Float = 1f,
+    palette: ScenePalette = ScenePalette.DAY,
+    horizonFraction: Float? = null,
 ) {
     val curveAnim by animateFloatAsState(curve, spring(stiffness = Spring.StiffnessVeryLow), label = "curve")
     val climbAnim by animateFloatAsState(climb, tween(2500), label = "climb")
@@ -89,12 +112,32 @@ fun DriveScene(
         val w = size.width
         val h = size.height
         // 하늘빛 바탕: 위는 옅은 하늘색, 아래로 갈수록 차분한 회백색
-        drawRect(Brush.verticalGradient(0f to Color(0xFFDDE8F3), 0.5f to Color(0xFFF2F5F9), 1f to SceneBackground))
-        val view = View(w, h, vanishY = -h * (0.25f + climbAnim * 0.06f), curve = curveAnim)
+        drawRect(Brush.verticalGradient(0f to palette.skyTop, 0.5f to palette.skyMid, 1f to palette.ground))
+        val vanishY = horizonFraction?.let { h * (it - climbAnim * 0.03f) } ?: (-h * (0.25f + climbAnim * 0.06f))
+        val view = View(w, h, vanishY = vanishY, curve = curveAnim)
+        if (horizonFraction != null) {
+            // 지평선이 보이는 구도: 하늘 아래로 땅을 깔고, 지평선에 옅은 안개 띠를 둔다.
+            drawRect(
+                Brush.verticalGradient(listOf(Color(0xFFE3EAF2), Color(0xFFCCD7E3), Color(0xFFB9C7D7)), startY = vanishY, endY = h),
+                topLeft = Offset(0f, vanishY),
+                size = Size(w, h - vanishY),
+            )
+            drawRect(
+                Brush.verticalGradient(
+                    0f to Color.White.copy(alpha = 0f),
+                    0.5f to Color.White.copy(alpha = 0.45f),
+                    1f to Color.White.copy(alpha = 0f),
+                    startY = vanishY - h * 0.035f,
+                    endY = vanishY + h * 0.05f,
+                ),
+                topLeft = Offset(0f, vanishY - h * 0.035f),
+                size = Size(w, h * 0.085f),
+            )
+        }
 
         // 도로는 따로 겹을 만들어 자동차 주변만 남기고 바깥은 투명하게 사라지게 한다(바탕 하늘빛이 비쳐 보이도록).
         drawIntoCanvas { it.saveLayer(Rect(Offset.Zero, size), Paint()) }
-        drawRoad(view, phase, playing, time)
+        drawRoad(view, phase, playing, time, palette)
         drawRect(
             Brush.radialGradient(
                 0f to Color.Black,
@@ -108,18 +151,48 @@ fun DriveScene(
         drawIntoCanvas { it.restore() }
 
         // 길 끝에서 번지는 빛: 먼 도로가 빛 속으로 녹아드는 느낌
-        val glowCenter = Offset(w * 0.5f + curveAnim * w * 0.18f, -h * 0.02f)
+        // 지평선이 보이면 해가 막 떠오르는 자리(지평선 위 가운데)에, 아니면 화면 위 가장자리에 빛을 둔다.
+        val glowCenter = if (horizonFraction != null) Offset(view.at(14f).first, vanishY) else Offset(w * 0.5f + curveAnim * w * 0.18f, -h * 0.02f)
+        val glowR = w * palette.glowRadius
         drawCircle(
             Brush.radialGradient(
-                0f to Color.White,
-                0.35f to Color(0xFFF6F3F2).copy(alpha = 0.75f),
+                0f to Color.White.copy(alpha = if (horizonFraction != null) 0.8f else 1f),
+                0.35f to palette.glowMid.copy(alpha = if (horizonFraction != null) 0.55f else 0.75f),
                 1f to Color.White.copy(alpha = 0f),
                 center = glowCenter,
-                radius = w * 0.62f,
+                radius = glowR,
             ),
-            radius = w * 0.62f,
+            radius = glowR,
             center = glowCenter,
         )
+        if (horizonFraction != null) {
+            // 지평선 위로 반쯤 떠오른 해(멜로드 심볼과 같은 모티프). 번지는 빛 위에 그려 윤곽이 보이게 한다.
+            val sunCenter = Offset(view.at(14f).first, vanishY)
+            val sunR = min(w, h) * 0.07f
+            drawCircle(
+                Brush.radialGradient(listOf(Color(0xFFCFEFF8).copy(alpha = 0.55f), Color.Transparent), center = sunCenter, radius = sunR * 2.6f),
+                radius = sunR * 2.6f,
+                center = sunCenter,
+            )
+            val half = Path().apply {
+                arcTo(Rect(sunCenter, sunR), 180f, 180f, forceMoveTo = true)
+                close()
+            }
+            drawPath(half, Brush.radialGradient(listOf(Color.White, Color(0xFFDDF2FA), Color(0xFF9FD3EA)), center = sunCenter, radius = sunR))
+            drawLine(Color.White.copy(alpha = 0.9f), Offset(sunCenter.x - sunR * 1.6f, vanishY), Offset(sunCenter.x + sunR * 1.6f, vanishY), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+        }
+        // 가장자리를 은은하게 가라앉혀 깊이를 만든다(첫 화면). 버튼이 놓이는 아래쪽은 따로 밝힌다.
+        if (palette.vignette != Color.Transparent) {
+            drawRect(
+                Brush.radialGradient(
+                    0f to Color.Transparent,
+                    0.55f to Color.Transparent,
+                    1f to palette.vignette.copy(alpha = 0.22f),
+                    center = Offset(w * 0.5f, h * 0.42f),
+                    radius = max(w, h) * 0.72f,
+                ),
+            )
+        }
 
         // 자동차는 항상 가운데 차선 중심에 놓는다(그 거리에서의 도로 중심을 투영으로 계산)
         val carY = h * carYFraction
@@ -172,9 +245,9 @@ private class View(val w: Float, val h: Float, val vanishY: Float, val curve: Fl
 
 /**
  * 3차선 도로. 모든 면과 선을 원근(거리 d에 반비례하는 폭)으로 그려 평면 그림처럼 보이지 않게 한다.
- * 갓길 → 연석 → 노면(바퀴 자국) → 가운데 차선 경로 리본(테두리·흐르는 빛) → 차선 순서로 쌓는다.
+ * 연석 → 노면(옅은 바퀴 자국) → 가운데 차선 경로 리본(테두리·흐르는 빛) → 차선 순서로 쌓는다.
  */
-private fun DrawScope.drawRoad(v: View, phase: Float, playing: Boolean, time: Float) {
+private fun DrawScope.drawRoad(v: View, phase: Float, playing: Boolean, time: Float, palette: ScenePalette) {
     // 차선 하나의 반폭(화면 아래 기준). 차선 경계는 ±1, ±3. 가로로 넓은 전체 화면에서는 높이에 맞춰 도로가 과하게 넓어지지 않게 한다.
     val lane = min(v.w * 0.17f, v.h * 0.22f)
     val far = 14f
@@ -198,18 +271,15 @@ private fun DrawScope.drawRoad(v: View, phase: Float, playing: Boolean, time: Fl
     }
     fun nearToFar(near: Color, farColor: Color) = Brush.verticalGradient(listOf(farColor, near), startY = 0f, endY = v.h)
 
-    // 갓길과 연석(노면보다 살짝 밝은 갓길, 그 안쪽의 얇은 그늘)
+    // 연석(노면 가장자리의 얇은 그늘). 갓길 띠는 줄무늬처럼 산만해 보여 그리지 않는다.
     for (side in listOf(-1f, 1f)) {
-        drawPath(band(side * 3.2f, side * 4.1f), nearToFar(Color(0xFFE2E7ED), Color(0xFFEAEEF2)))
-        drawPath(band(side * 3.2f, side * 3.34f), Color(0xFFC5CED9))
+        drawPath(band(side * 3.2f, side * 3.30f), Color(0xFFBFC9D5))
     }
     // 노면: 가까울수록 조금 짙고 멀수록 안개처럼 옅어진다
-    drawPath(band(-3.2f, 3.2f), nearToFar(Color(0xFFD2D9E2), Color(0xFFE5EAEF)))
-    // 옆 차선의 옅은 바퀴 자국
+    drawPath(band(-3.2f, 3.2f), nearToFar(palette.roadNear, palette.roadFar))
+    // 옆 차선의 아주 옅은 바퀴 자국(한 줄씩만)
     for (center in listOf(-2f, 2f)) {
-        for (offset in listOf(-0.45f, 0.45f)) {
-            drawPath(band(center + offset - 0.10f, center + offset + 0.10f), Color(0xFFC9D1DB).copy(alpha = 0.45f))
-        }
+        drawPath(band(center - 0.08f, center + 0.08f), Color(0xFFC3CCD7).copy(alpha = 0.30f))
     }
 
     // 경로 리본(가운데 차선): 차 앞에서 가장 진하고 멀어질수록 사라진다
