@@ -66,20 +66,17 @@ fun SceneCard(
     }
 }
 
-/** S01 첫 화면 */
+/** S01 첫 화면: 왼쪽 주행 장면 위에 멜로드 로고를 얹고, 오른쪽에 큰 버튼 세 개만 둔다. */
 @Composable
 fun HomeScreen(onStartTrip: () -> Unit, onOurMusic: () -> Unit, onInfo: () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize().padding(36.dp)) {
         val wide = maxWidth > 840.dp
-        val intro: @Composable ColumnScope.() -> Unit = {
-            HeroTile(decoration = { IdleWaves(Modifier.matchParentSize()) }) {
-                Text(
-                    stringResource(R.string.brand),
-                    style = MaterialTheme.typography.displaySmall,
-                    color = Color.White,
-                    modifier = Modifier.semantics { heading() },
-                )
-            }
+        val logo: @Composable BoxScope.() -> Unit = {
+            MelroadLogo(
+                name = stringResource(R.string.app_name),
+                wordmark = stringResource(R.string.brand),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 40.dp),
+            )
         }
         val actions: @Composable ColumnScope.() -> Unit = {
             BigButton(stringResource(R.string.action_start_trip), onStartTrip, icon = IconKind.PLAY)
@@ -88,16 +85,14 @@ fun HomeScreen(onStartTrip: () -> Unit, onOurMusic: () -> Unit, onInfo: () -> Un
         }
         if (wide) {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(40.dp), verticalAlignment = Alignment.CenterVertically) {
-                SceneCard(Modifier.weight(1.1f).fillMaxHeight(), speedKmh = 30f, curve = 0.15f)
+                SceneCard(Modifier.weight(1.25f).fillMaxHeight(), speedKmh = 30f, curve = 0.15f, overlay = logo)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                    intro()
                     actions()
                 }
             }
         } else {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-                SceneCard(Modifier.fillMaxWidth().height(260.dp), speedKmh = 30f, curve = 0.15f)
-                intro()
+                SceneCard(Modifier.fillMaxWidth().height(320.dp), speedKmh = 30f, curve = 0.15f, overlay = logo)
                 actions()
             }
         }
