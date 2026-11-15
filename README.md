@@ -67,7 +67,7 @@ sampledata/          시뮬레이션 데이터 설명
 | Media3 세션 | 태블릿에서 PLAYING 확인, 차량 미디어 센터 미검증 |
 | 차량 속도 어댑터(P5) | 구현, Pleos AVD 미검증 |
 | CarUxRestrictions(P7) | 구현, 미검증 |
-| FusedLocation(P6) | **미구현** — LocationData 필드 공식 확인 전 |
+| FusedLocation(P6) | SDK 1.1.3 클래스·필드 확인 완료, 어댑터 **미구현** |
 | Pleos Connect AVD 설치·실행 | **미실시**(시스템 이미지 미설치) |
 | 시각장애인·저시력 당사자 사용성 검증 | 미진행 |
 

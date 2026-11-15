@@ -65,23 +65,22 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
         private val R_QQH = listOf(0 to 2, 2 to 2, 4 to 4)
         private val R_QEEH = listOf(0 to 2, 2 to 1, 3 to 1, 4 to 4)
         private val R_HQQ = listOf(0 to 4, 4 to 2, 6 to 2)
-        private val R_SYNC = listOf(1 to 1, 2 to 2, 4 to 3, 7 to 1)
-        private val R_FLOW = listOf(0 to 1, 1 to 1, 2 to 2, 4 to 1, 5 to 1, 6 to 2)
-        private val R_QQQQ = listOf(0 to 2, 2 to 2, 4 to 2, 6 to 2)
-        private val R_QUESTION = listOf(0 to 6, 6 to 1, 7 to 1) // 긴 음 뒤 다음 악절로 이어 주는 못갖춘 음
-        private val R_ANSWER = listOf(0 to 8)
-        private val R_SPARSE = listOf(0 to 4)
+        private val R_PUSH = listOf(0 to 2, 2 to 1, 3 to 3, 6 to 2) // 당김음으로 앞으로 밀리는 느낌
+        private val R_332 = listOf(0 to 3, 3 to 3, 6 to 2) // 3-3-2 리듬
     }
 
+    /** 한 마디짜리 선율 모티브: 리듬 + 음 사이 간격(음계 단계). 같은 구간 종류에서 반복·변주되어 '후크'가 된다. */
+    private class Motif(val rhythm: List<Pair<Int, Int>>, val intervals: IntArray)
+
     private class PhrasePlan(
-        val rhythms: List<List<Pair<Int, Int>>>,
-        val targets: IntArray,
+        val motif: Motif,
+        val anchor: Int,
+        val sequenceStep: Int,
+        val varyThirdBar: Boolean,
         val appoggiatura: BooleanArray,
-        val endStable: Boolean,
+        val question: Boolean,
     )
 
-    private val verseCells: Pair<List<Pair<Int, Int>>, List<Pair<Int, Int>>>
-    private val chorusCells: Pair<List<Pair<Int, Int>>, List<Pair<Int, Int>>>
 
     private var density = 1
     private var registerStep = 0
@@ -116,10 +115,6 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
     init {
         val rng = SeededRandom(seed xor SALT_THEME)
         bpm = (theme.bpm + listOf(-2, 0, 2, 4)[rng.nextInt(4)]).coerceIn(70, 86)
-        val verseChoices = listOf(R_DOTTED, R_QQH, R_QEEH, R_HQQ)
-        val chorusChoices = listOf(R_DOTTED, R_QEEH, R_SYNC, R_QQH)
-        verseCells = verseChoices[rng.nextInt(verseChoices.size)] to verseChoices[rng.nextInt(verseChoices.size)]
-        chorusCells = chorusChoices[rng.nextInt(chorusChoices.size)] to chorusChoices[rng.nextInt(chorusChoices.size)]
         template = FORM_TEMPLATES[rng.nextInt(FORM_TEMPLATES.size)]
     }
 
@@ -151,6 +146,7 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
         addGuideLine(events, bar, slots)
         addGroove(events, bar, rng)
         addSectionFill(events, bar, slots)
+        applyBuildUp(events, bar, slots)
         return sortEvents(events)
     }
 
@@ -286,45 +282,79 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
     }
 
     private fun planPhrase(phraseInSection: Int, rng: SeededRandom): PhrasePlan? {
+        if (section == SectionType.INTRO || section == SectionType.REST) return null
         val question = phraseInSection % 2 == 0
-        val endCell = if (question) R_QUESTION else R_ANSWER
-        val (c1, c2) = when (section) {
-            SectionType.VERSE -> verseCells
-            SectionType.CHORUS, SectionType.BRIDGE -> chorusCells
-            SectionType.INTERLUDE -> R_HQQ to R_SPARSE
-            SectionType.INTRO, SectionType.REST -> return null
-        }
-        val rhythms = listOf(c1, c2, vary(c1, rng), endCell).mapIndexed { i, cell ->
-            if (i == 3) cell else adaptRhythm(cell, rng)
-        }
-        // 악절마다 선율의 높낮이 중심을 조금씩 옮기고, 후렴은 한층 높여 고조시킨다.
+        // 후렴 모티브는 오래 유지(정체성), 주제 모티브는 조가 바뀔 때마다 새로 만든다.
+        val variant = if (section == SectionType.CHORUS) formCycle / 4 else formCycle / 2
+        val motif = motifFor(section, variant)
         val shift = (rng.nextInt(3) - 1) + (if (section == SectionType.CHORUS) 2 else 0)
-        val base = (if (question) intArrayOf(3, 6, 8, 5) else intArrayOf(6, 8, 5, 2)).map { (it + shift).coerceIn(0, MELODY_SPAN) }.toIntArray()
-        val targets = when (contour) {
-            1 -> intArrayOf(base[0], base[1] + 1, base[2] + 2, base[3] + 1) // 오른쪽 굽이: 위로 열리는 선율
-            -1 -> intArrayOf(base[2] + 1, base[1], base[0] - 1, base[3] - 1) // 왼쪽 굽이: 내려앉는 선율
-            else -> base
+        val anchor = (MELODY_LOW + registerStep * 2) + (if (question) 4 else 5) + shift
+        val sequenceStep = when (contour) {
+            1 -> 2
+            -1 -> -2
+            else -> if (question) 1 else -1
         }
-        val appoggiatura = BooleanArray(4) { i -> i < 3 && section != SectionType.INTERLUDE && rng.chance(0.3) }
-        return PhrasePlan(rhythms, targets, appoggiatura, endStable = !question)
+        val appoggiatura = BooleanArray(4) { i -> i < 3 && section != SectionType.INTERLUDE && rng.chance(0.25) }
+        return PhrasePlan(motif, anchor, sequenceStep, varyThirdBar = !question || rng.chance(0.4), appoggiatura, question)
     }
 
-    /** 리듬 변주: 긴 음 하나를 둘로 나눠 같은 주제를 조금 다르게 들려준다. */
-    private fun vary(cell: List<Pair<Int, Int>>, rng: SeededRandom): List<Pair<Int, Int>> {
-        val splittable = cell.indices.filter { cell[it].second >= 2 && cell[it].second % 2 == 0 }
-        if (splittable.isEmpty() || rng.chance(0.35)) return cell
-        val i = splittable[rng.nextInt(splittable.size)]
-        val (e, len) = cell[i]
-        val half = len / 2
-        return cell.subList(0, i) + listOf(e to half, e + half to half) + cell.subList(i + 1, cell.size)
+    private val motifCache = HashMap<Long, Motif>()
+
+    private fun motifFor(kind: SectionType, variant: Int): Motif {
+        val key = kind.ordinal * 10_000L + variant
+        return motifCache.getOrPut(key) {
+            val rng = SeededRandom(seed xor SALT_THEME xor (key * 0x9E3779B1L))
+            val choices = when (kind) {
+                SectionType.CHORUS -> listOf(R_QEEH, R_PUSH, R_DOTTED, R_332)
+                SectionType.BRIDGE -> listOf(R_HQQ, R_DOTTED, R_332)
+                SectionType.INTERLUDE -> listOf(R_332, R_HQQ)
+                else -> listOf(R_DOTTED, R_QQH, R_332, R_PUSH)
+            }
+            val rhythm = choices[rng.nextInt(choices.size)]
+            val n = rhythm.size - 1
+            val intervals = IntArray(n) { i ->
+                val up = i < (n + 1) / 2 // 앞쪽은 오르고 뒤쪽은 내려오는 아치형
+                val mag = if (rng.chance(0.65)) 1 else 2
+                if (up) mag else -mag
+            }
+            if (n >= 2 && rng.chance(0.35)) intervals[rng.nextInt(n)] = 0 // 같은 음 반복으로 리듬을 강조
+            Motif(rhythm, intervals)
+        }
     }
 
-    /** 속도 밀도에 따라 리듬 셀을 조정한다. 빠를수록 음표가 잘게 나뉘지만 세기는 오르지 않는다. */
-    private fun adaptRhythm(cell: List<Pair<Int, Int>>, rng: SeededRandom): List<Pair<Int, Int>> = when (density) {
-        0 -> R_SPARSE
-        1 -> cell
-        2 -> if (cell.size <= 3 && rng.chance(0.5)) R_QEEH else cell
-        else -> if (rng.chance(0.5)) R_FLOW else if (rng.chance(0.5)) R_SYNC else R_QQQQ
+    /** 다음에 올 예정인 구간(오르막 고조 같은 즉석 변경은 알 수 없다) */
+    private fun plannedNextSection(): SectionType =
+        if (formIndex + 1 < template.size) {
+            template[formIndex + 1]
+        } else {
+            FORM_TEMPLATES[SeededRandom.forBar(seed, formCycle + 1, salt = 11L).nextInt(FORM_TEMPLATES.size)][0]
+        }
+
+    /**
+     * 후렴 직전 2마디: 현악이 부풀고 킥이 4분음표로 걸으며, 마지막 반 마디는 반주를 비워 숨을 고른다.
+     * (선율의 못갖춘 음만 남아 후렴으로 이어진다)
+     */
+    private fun applyBuildUp(events: MutableList<MusicEvent>, bar: Int, slots: List<Triple<Int, Int, Int>>) {
+        val barsIn = bar - sectionStartBar
+        if (section == SectionType.CHORUS || section == SectionType.REST || section == SectionType.INTRO || density == 0) return
+        if (barsIn < BARS_PER_SECTION - 2 || plannedNextSection() != SectionType.CHORUS) return
+        val last = barsIn == BARS_PER_SECTION - 1
+        val degree = slots.first().third
+        val v = if (last) 40 else 30
+        note(events, bar, 0, 8, Instrument.STRINGS, Chords.fold(degree, -4, 3), v)
+        note(events, bar, 0, 8, Instrument.STRINGS, Chords.fold(degree + 4, -4, 3), v - 4)
+        if (last) {
+            for (beat in 0 until 3) {
+                val start = eighthMs(bar, beat * 2)
+                val end = eighthMs(bar, beat * 2 + 1)
+                events.add(MusicEvent(start, end - start, Instrument.PERC, 36, 34 + beat * 4, 50))
+            }
+            val breath = eighthMs(bar, 6)
+            events.removeAll {
+                it.atMs >= breath && (it.instrument == Instrument.PERC || it.instrument == Instrument.PIANO_SOFT ||
+                    it.instrument == Instrument.EPIANO || it.instrument == Instrument.GUITAR)
+            }
+        }
     }
 
     // ------------------------------------------------------------------ 화성
@@ -405,7 +435,8 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
                 addBassNote(out, bar, 4, 2, degree + 4, velocity - 4)
                 addBassNote(out, bar, 6, 2, approach, velocity - 8)
             } else {
-                addBassNote(out, bar, 0, 4, degree, velocity)
+                addBassNote(out, bar, 0, 3, degree, velocity)
+                addBassNote(out, bar, 3, 1, degree, velocity - 8)
                 addBassNote(out, bar, 4, 3, degree + 4, velocity - 6)
                 // 다음 마디 근음으로 이어 주는 경과음(같은 악절 안에서만 다음 화음을 안다)
                 val barInPhrase = bar % BARS_PER_PHRASE
@@ -463,8 +494,15 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
                     }
                 }
                 SectionType.CHORUS -> {
-                    addEpChord(out, bar, start, length, degree, 30)
-                    if (density >= 1) addArpeggio(out, bar, start, length, degree, eighths = density >= 2, velocity = 30, rng = rng)
+                    // 당김음 화음(1, 2&, 4) + 밀도가 높으면 흐르는 분산화음
+                    if (length >= 8) {
+                        addEpChord(out, bar, 0, 3, degree, 34)
+                        addEpChord(out, bar, 3, 3, degree, 30)
+                        addEpChord(out, bar, 6, 2, degree, 30)
+                    } else {
+                        addEpChord(out, bar, start, length, degree, 32)
+                    }
+                    if (density >= 2) addArpeggio(out, bar, start, length, degree, eighths = true, velocity = 26, rng = rng)
                 }
                 SectionType.INTERLUDE -> {
                     addEpChord(out, bar, start, length, degree, 34)
@@ -578,17 +616,11 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
                 val shakerStep = if (density >= 3) 1 else 2
                 for (e in 0 until 8 step shakerStep) hit(e, 42, if (e % 2 == 0) 20 else 14)
             }
-            SectionType.BRIDGE -> {
-                hit(0, 36, 38)
-                for (e in 0 until 8 step 2) hit(e, 42, 16)
-            }
-            SectionType.INTERLUDE -> if (density >= 2) {
-                for (e in 2 until 8 step 4) hit(e, 42, 14)
-            }
+            // 브리지·간주는 타악 없이 비워 두어 후렴과 대비를 만든다
             else -> Unit
         }
         // 가끔 4박에 작은 브러시 장식
-        if (section != SectionType.INTERLUDE && bar % BARS_PER_PHRASE == 3 && rng.chance(0.5)) hit(7, 38, 20)
+        if ((section == SectionType.VERSE || section == SectionType.CHORUS) && bar % BARS_PER_PHRASE == 3 && rng.chance(0.5)) hit(7, 38, 20)
     }
 
     /** 구간의 마지막 마디: 다음 구간으로 넘어가는 짧은 상행 음계(피아노 분산음) */
@@ -610,12 +642,13 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
         return low to low + MELODY_SPAN
     }
 
+    /**
+     * 모티브 기반 선율: 1마디 모티브 → 화음에 맞춘 반복(시퀀스) → 반복/변주 → 종지.
+     * 같은 리듬·윤곽이 되풀이되어 기억에 남고, 화음이 바뀌며 자연스럽게 변한다. 도약은 5도 이내.
+     */
     private fun addMelody(out: MutableList<MusicEvent>, bar: Int, rng: SeededRandom) {
         val p = plan ?: return
         val barInPhrase = bar % BARS_PER_PHRASE
-        val rhythm = p.rhythms[barInPhrase]
-        if (rhythm.isEmpty()) return
-        // 순환마다 주제를 맡는 악기를 바꿔 같은 선율도 새롭게 들리게 한다.
         val instrument = when (section) {
             SectionType.INTERLUDE -> Instrument.GUITAR
             SectionType.BRIDGE -> Instrument.STRINGS
@@ -624,7 +657,7 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
         }
         val (low, high) = melodyRange()
         val slots = harmonyOf(bar)
-        val target = (low + p.targets[barInPhrase]).coerceIn(low, high)
+        val firstDegree = slots.first().third
         val baseVelocity = when (density) {
             0, 1 -> 60
             2 -> 57
@@ -632,28 +665,52 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
         } + (if (barInPhrase == 1 || barInPhrase == 2) 3 else 0) + sectionDynamics()
         val expression = (62 + registerStep * 10).coerceIn(0, 127)
 
+        // (8분음표 위치, 길이, 음계 단계) 목록을 만든다
+        val notes = ArrayList<Triple<Int, Int, Int>>()
         var prev = lastMelodyStep
-        for ((i, slot) in rhythm.withIndex()) {
-            val (eighth, length) = slot
-            val degree = slots.last { it.first <= eighth }.third
-            val chord = Chords.triad(degree)
-            val strong = i == 0 || eighth == 4 || length >= 4
-            val lastOfPhrase = barInPhrase == 3 && i == rhythm.lastIndex
-            val step = if (strong) {
-                val wanted = if (lastOfPhrase && p.endStable) {
-                    nearestTone(prev, intArrayOf(degree, degree + 2), low, high)
-                } else {
-                    nearestTone(target, chord, low, high)
-                }
-                limitLeap(prev, wanted, chord, low, high)
-            } else {
-                // 경과음: 다음 목표 쪽으로 한 단계. 이미 목표에 있으면 이웃음.
-                val dir = Integer.signum(target - prev).let { if (it == 0) (if (rng.chance(0.5)) 1 else -1) else it }
-                (prev + dir).coerceIn(low, high)
+        if (barInPhrase < 3) {
+            val desired = when (barInPhrase) {
+                0 -> p.anchor
+                1 -> p.anchor + p.sequenceStep
+                else -> p.anchor
             }
-            var velocity = baseVelocity + rng.nextInt(-4, 4) + (if (i == 0) 2 else 0)
-            velocity = velocity.coerceIn(30, 80)
+            val chord = Chords.triad(firstDegree)
+            var step = limitLeap(prev, nearestTone(desired.coerceIn(low, high), chord, low, high), chord, low, high)
+            val rhythm = densify(p.motif.rhythm)
+            for ((i, slot) in rhythm.withIndex()) {
+                if (i > 0) {
+                    var interval = p.motif.intervals.getOrElse(i - 1) { if (rng.chance(0.5)) 1 else -1 }
+                    if (barInPhrase == 2 && p.varyThirdBar && i == rhythm.lastIndex) interval = -interval
+                    var next = step + interval
+                    if (next > high || next < low) next = step - interval
+                    if (slot.first == 4) {
+                        // 3박은 화음음에 안착
+                        val degree = slots.last { it.first <= slot.first }.third
+                        next = limitLeap(step, nearestTone(next, Chords.triad(degree), low, high), Chords.triad(degree), low, high)
+                    }
+                    step = next.coerceIn(low, high)
+                }
+                notes.add(Triple(slot.first, slot.second, step))
+            }
+        } else {
+            // 종지 마디: 질문 악절은 열린 음(3·5음)에서 멈추고 못갖춘 음으로 다음 악절을 부른다. 답 악절은 으뜸·3음에 내려앉는다.
+            val chord = Chords.triad(firstDegree)
+            val targetTones = if (p.question) intArrayOf(firstDegree + 2, firstDegree + 4) else intArrayOf(firstDegree, firstDegree + 2)
+            val land = limitLeap(prev, nearestTone(prev, targetTones, low, high), chord, low, high)
+            if (p.question) {
+                notes.add(Triple(0, 6, land))
+                val dir = Integer.signum(p.anchor - land).let { if (it == 0) 1 else it }
+                notes.add(Triple(6, 1, (land + dir).coerceIn(low, high)))
+                notes.add(Triple(7, 1, (land + 2 * dir).coerceIn(low, high)))
+            } else {
+                notes.add(Triple(0, 8, land))
+            }
+        }
 
+        for ((i, n) in notes.withIndex()) {
+            val (eighth, length, step) = n
+            var velocity = baseVelocity + rng.nextInt(-3, 3) + (if (i == 0) 2 else 0)
+            velocity = velocity.coerceIn(30, 80)
             if (i == 0 && length >= 3 && p.appoggiatura[barInPhrase] && abs(step - prev) <= 2 && step + 1 <= high) {
                 // 앞꾸밈음: 위 이웃음에서 화음음으로 내려와 해결(달콤한 긴장)
                 note(out, bar, eighth, 1, instrument, step + 1, velocity - 6, expression)
@@ -668,6 +725,19 @@ class DeterministicComposer(val seed: Long, val theme: Theme) {
             prev = step
         }
         lastMelodyStep = prev
+    }
+
+    /** 밀도가 높으면 긴 음을 둘로 나눠 움직임을 더한다(세기는 올리지 않는다). */
+    private fun densify(rhythm: List<Pair<Int, Int>>): List<Pair<Int, Int>> {
+        if (density < 2) return rhythm
+        val splits = if (density >= 3) 2 else 1
+        var out = rhythm
+        repeat(splits) {
+            val i = out.indices.filter { out[it].second >= 4 && out[it].second % 2 == 0 }.maxByOrNull { out[it].second } ?: return out
+            val (e, len) = out[i]
+            out = out.subList(0, i) + listOf(e to len / 2, e + len / 2 to len / 2) + out.subList(i + 1, out.size)
+        }
+        return out
     }
 
     private fun nearestTone(target: Int, chord: IntArray, low: Int, high: Int): Int {

@@ -14,7 +14,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -86,8 +85,10 @@ fun DriveScene(
         val carY = h * 0.70f
         val carD = (h - view.vanishY) / (carY - view.vanishY)
         val carCenter = Offset(view.at(carD).first, carY)
-        drawRings(carCenter, w, playing, time, density)
-        drawSedan(carCenter, min(w * 0.17f, h * 0.24f), curveAnim, if (playing) time else 0f, playing)
+        // 모형처럼 작게: 도로 폭 대비 차 폭이 과하지 않도록 한다.
+        val carWidth = min(w * 0.095f, h * 0.13f)
+        drawRings(carCenter, carWidth, playing, time, density)
+        drawSedan(carCenter, carWidth, curveAnim, if (playing) time else 0f, playing)
         // 바깥쪽 페이드아웃: 자동차 주변만 남긴다
         val radius = max(w, h) * 0.62f
         drawRect(
@@ -170,7 +171,7 @@ private fun DrawScope.drawLanes(v: View, phase: Float, playing: Boolean, time: F
     }
 }
 
-private fun DrawScope.drawRings(center: Offset, w: Float, playing: Boolean, time: Float, density: Int) {
+private fun DrawScope.drawRings(center: Offset, carWidth: Float, playing: Boolean, time: Float, density: Int) {
     if (!playing) return
     val period = when (density) {
         0 -> 3.2f
@@ -180,135 +181,168 @@ private fun DrawScope.drawRings(center: Offset, w: Float, playing: Boolean, time
     }
     for (i in 0 until 3) {
         val p = ((time / period) + i / 3f) % 1f
-        val rw = w * (0.14f + p * 0.30f)
+        val rw = carWidth * (0.9f + p * 2.2f)
         drawOval(
             ActiveBlue.copy(alpha = (1f - p) * 0.35f),
-            topLeft = Offset(center.x - rw, center.y - rw * 0.30f),
-            size = Size(rw * 2f, rw * 0.60f),
-            style = Stroke(width = w * 0.003f),
+            topLeft = Offset(center.x - rw, center.y - rw * 0.32f),
+            size = Size(rw * 2f, rw * 0.64f),
+            style = Stroke(width = carWidth * 0.02f),
         )
     }
 }
 
 /**
- * 위에서 비스듬히 본 단순한 세단 뒷모습(일반형, 특정 차종 아님). 후미등·번호판 같은 세부 없이
- * 면 단위 음영만으로 입체감을 낸다: 범퍼 → 트렁크 → 뒷유리·유리 지붕 → 앞유리 → 보닛.
+ * 위에서 비스듬히 본 패스트백 세단(일반형, 특정 차종 아님).
+ * 바퀴·후미등·번호판·사이드미러 없이 차체 면의 굴곡(뒤 펜더-허리-앞 펜더), 유리 지붕, 앞유리 경계,
+ * 트렁크 립과 보닛 라인 같은 최소한의 선으로만 입체감을 낸다.
  */
 private fun DrawScope.drawSedan(center: Offset, cw: Float, curve: Float, time: Float, playing: Boolean) {
-    val ch = cw * 1.55f // 위에서 보므로 앞뒤 길이가 보인다
-    val bounce = if (playing) sin(time * 2f * PI.toFloat() * 1.1f) * ch * 0.004f else 0f
+    val ch = cw * 2.0f // 위에서 보므로 앞뒤 길이가 길게 보인다
+    val bounce = if (playing) sin(time * 2f * PI.toFloat() * 1.1f) * ch * 0.003f else 0f
     val cx = center.x
-    val bottom = center.y + ch * 0.38f + bounce
+    val bottom = center.y + ch * 0.42f + bounce
     fun yAt(f: Float) = bottom - ch * f
+    fun x(f: Float) = cx + cw * f
 
-    // 부드러운 바닥 그림자(번짐)
-    val shadowCenter = Offset(cx, yAt(0.48f))
+    // 바닥 그림자: 넓게 번지는 그림자 + 차체 바로 아래 짙은 접지 그림자(빛은 왼쪽 위에서 온다고 가정)
     drawOval(
         Brush.radialGradient(
-            0f to HyundaiBlue.copy(alpha = 0.22f),
-            0.6f to HyundaiBlue.copy(alpha = 0.08f),
+            0f to HyundaiBlue.copy(alpha = 0.16f),
+            0.6f to HyundaiBlue.copy(alpha = 0.05f),
             1f to Color.Transparent,
-            center = shadowCenter,
+            center = Offset(x(0.04f), yAt(0.46f)),
             radius = ch * 0.62f,
         ),
-        topLeft = Offset(cx - cw * 0.75f, yAt(1.08f)),
-        size = Size(cw * 1.5f, ch * 1.2f),
+        topLeft = Offset(x(-0.70f), yAt(1.08f)),
+        size = Size(cw * 1.48f, ch * 1.22f),
+    )
+    drawOval(
+        Brush.radialGradient(
+            0f to Color(0xFF0B1F3A).copy(alpha = 0.22f),
+            1f to Color.Transparent,
+            center = Offset(x(0.02f), yAt(0.48f)),
+            radius = cw * 0.62f,
+        ),
+        topLeft = Offset(x(-0.56f), yAt(1.02f)),
+        size = Size(cw * 1.14f, ch * 1.06f),
     )
 
     rotate(curve * 4f, pivot = Offset(cx, yAt(0.5f))) {
-        // 바퀴(옆으로 살짝)
-        val tireW = cw * 0.11f
-        val tireH = ch * 0.17f
-        for ((fy, inset) in listOf(0.10f to 0.53f, 0.70f to 0.49f)) {
-            for (side in listOf(-1f, 1f)) {
-                drawRoundRect(
-                    Color(0xFF3A4452),
-                    topLeft = Offset(cx + side * cw * inset - tireW / 2, yAt(fy + 0.17f)),
-                    size = Size(tireW, tireH),
-                    cornerRadius = CornerRadius(tireW * 0.35f),
-                )
-            }
-        }
-
-        // 차체 외곽(뒤가 넓고 앞이 살짝 좁은 형태)
+        // 차체: 넓은 뒤 펜더 → 살짝 잘록한 허리 → 앞 펜더 → 둥근 앞코
         val body = Path().apply {
-            moveTo(cx - cw * 0.42f, yAt(0.0f))
-            cubicTo(cx - cw * 0.52f, yAt(0.0f), cx - cw * 0.52f, yAt(0.06f), cx - cw * 0.51f, yAt(0.12f))
-            lineTo(cx - cw * 0.50f, yAt(0.62f))
-            cubicTo(cx - cw * 0.49f, yAt(0.88f), cx - cw * 0.44f, yAt(1.0f), cx - cw * 0.30f, yAt(1.0f))
-            lineTo(cx + cw * 0.30f, yAt(1.0f))
-            cubicTo(cx + cw * 0.44f, yAt(1.0f), cx + cw * 0.49f, yAt(0.88f), cx + cw * 0.50f, yAt(0.62f))
-            lineTo(cx + cw * 0.51f, yAt(0.12f))
-            cubicTo(cx + cw * 0.52f, yAt(0.06f), cx + cw * 0.52f, yAt(0.0f), cx + cw * 0.42f, yAt(0.0f))
+            moveTo(x(-0.34f), yAt(0f))
+            cubicTo(x(-0.45f), yAt(0f), x(-0.49f), yAt(0.04f), x(-0.495f), yAt(0.13f))
+            cubicTo(x(-0.50f), yAt(0.24f), x(-0.47f), yAt(0.40f), x(-0.455f), yAt(0.50f))
+            cubicTo(x(-0.445f), yAt(0.58f), x(-0.475f), yAt(0.66f), x(-0.47f), yAt(0.76f))
+            cubicTo(x(-0.465f), yAt(0.88f), x(-0.40f), yAt(0.985f), x(-0.26f), yAt(1.0f))
+            cubicTo(x(-0.12f), yAt(1.012f), x(0.12f), yAt(1.012f), x(0.26f), yAt(1.0f))
+            cubicTo(x(0.40f), yAt(0.985f), x(0.465f), yAt(0.88f), x(0.47f), yAt(0.76f))
+            cubicTo(x(0.475f), yAt(0.66f), x(0.445f), yAt(0.58f), x(0.455f), yAt(0.50f))
+            cubicTo(x(0.47f), yAt(0.40f), x(0.50f), yAt(0.24f), x(0.495f), yAt(0.13f))
+            cubicTo(x(0.49f), yAt(0.04f), x(0.45f), yAt(0f), x(0.34f), yAt(0f))
+            cubicTo(x(0.15f), yAt(-0.008f), x(-0.15f), yAt(-0.008f), x(-0.34f), yAt(0f))
             close()
         }
-        drawPath(body, Brush.verticalGradient(listOf(Color(0xFFFDFEFF), Color(0xFFE6EBF1), Color(0xFFD3DAE3)), startY = yAt(1f), endY = bottom))
+        // 펄 화이트: 앞쪽이 밝고 뒤로 갈수록 은은한 회색, 양옆은 곡면이 꺾이며 어두워진다
+        drawPath(body, Brush.verticalGradient(listOf(Color.White, Color(0xFFF4F6F9), Color(0xFFE1E6EC)), startY = yAt(1f), endY = bottom))
         drawPath(
             body,
             Brush.horizontalGradient(
-                listOf(Color(0xFF8A97A8).copy(alpha = 0.35f), Color.Transparent, Color.Transparent, Color(0xFF8A97A8).copy(alpha = 0.35f)),
-                startX = cx - cw * 0.52f,
-                endX = cx + cw * 0.52f,
+                0f to Color(0xFF66768C).copy(alpha = 0.34f),
+                0.16f to Color.Transparent,
+                0.84f to Color.Transparent,
+                1f to Color(0xFF66768C).copy(alpha = 0.40f),
+                startX = x(-0.5f),
+                endX = x(0.5f),
             ),
         )
-        drawPath(body, Color(0xFFB9C3CF), style = Stroke(width = cw * 0.008f))
+        // 왼쪽 어깨선에 맺히는 빛
+        drawPath(
+            body,
+            Brush.horizontalGradient(
+                0f to Color.Transparent,
+                0.10f to Color.White.copy(alpha = 0.75f),
+                0.22f to Color.Transparent,
+                startX = x(-0.5f),
+                endX = x(0.5f),
+            ),
+        )
+        drawPath(body, Color(0xFFBCC5D1), style = Stroke(width = cw * 0.006f))
 
-        // 범퍼 아래쪽 면(살짝 어둡게)
+        // 트렁크 립(덕테일): 밝은 선 + 아래 얇은 그늘
         drawPath(
             Path().apply {
-                moveTo(cx - cw * 0.44f, yAt(0.0f))
-                lineTo(cx + cw * 0.44f, yAt(0.0f))
-                lineTo(cx + cw * 0.47f, yAt(0.06f))
-                lineTo(cx - cw * 0.47f, yAt(0.06f))
-                close()
+                moveTo(x(-0.33f), yAt(0.105f))
+                quadraticBezierTo(cx, yAt(0.085f), x(0.33f), yAt(0.105f))
             },
-            Color(0xFFC3CCD7),
+            Color(0xFFC9D1DC),
+            style = Stroke(width = cw * 0.008f, cap = StrokeCap.Round),
+        )
+        drawPath(
+            Path().apply {
+                moveTo(x(-0.32f), yAt(0.115f))
+                quadraticBezierTo(cx, yAt(0.095f), x(0.32f), yAt(0.115f))
+            },
+            Color.White,
+            style = Stroke(width = cw * 0.010f, cap = StrokeCap.Round),
         )
 
-        // 유리 캐노피: 뒷유리 + 유리 지붕 + 앞유리를 하나의 매끈한 면으로
+        // 유리: 뒷유리부터 유리 지붕까지 하나로 이어진 캐노피
         val canopy = Path().apply {
-            moveTo(cx - cw * 0.38f, yAt(0.24f))
-            cubicTo(cx - cw * 0.40f, yAt(0.40f), cx - cw * 0.37f, yAt(0.62f), cx - cw * 0.35f, yAt(0.76f))
-            cubicTo(cx - cw * 0.30f, yAt(0.82f), cx + cw * 0.30f, yAt(0.82f), cx + cw * 0.35f, yAt(0.76f))
-            cubicTo(cx + cw * 0.37f, yAt(0.62f), cx + cw * 0.40f, yAt(0.40f), cx + cw * 0.38f, yAt(0.24f))
-            cubicTo(cx + cw * 0.25f, yAt(0.21f), cx - cw * 0.25f, yAt(0.21f), cx - cw * 0.38f, yAt(0.24f))
+            moveTo(x(-0.27f), yAt(0.20f))
+            cubicTo(x(-0.34f), yAt(0.24f), x(-0.36f), yAt(0.40f), x(-0.355f), yAt(0.50f))
+            cubicTo(x(-0.35f), yAt(0.62f), x(-0.34f), yAt(0.74f), x(-0.29f), yAt(0.80f))
+            cubicTo(x(-0.18f), yAt(0.845f), x(0.18f), yAt(0.845f), x(0.29f), yAt(0.80f))
+            cubicTo(x(0.34f), yAt(0.74f), x(0.35f), yAt(0.62f), x(0.355f), yAt(0.50f))
+            cubicTo(x(0.36f), yAt(0.40f), x(0.34f), yAt(0.24f), x(0.27f), yAt(0.20f))
+            cubicTo(x(0.14f), yAt(0.18f), x(-0.14f), yAt(0.18f), x(-0.27f), yAt(0.20f))
             close()
         }
-        drawPath(canopy, Brush.verticalGradient(listOf(Color(0xFF55657A), Color(0xFF2E3A49), Color(0xFF3C4A5C)), startY = yAt(0.82f), endY = yAt(0.21f)))
-        // 유리 반사광(사선)
+        drawPath(
+            canopy,
+            Brush.verticalGradient(
+                listOf(Color(0xFF4A5B71), Color(0xFF1A2330), Color(0xFF141C27), Color(0xFF2C394B)),
+                startY = yAt(0.845f),
+                endY = yAt(0.18f),
+            ),
+        )
+        // 하늘이 비친 부드러운 반사(왼쪽 위에서 안쪽으로 사라짐)
+        drawPath(
+            canopy,
+            Brush.linearGradient(
+                0f to Color.White.copy(alpha = 0.20f),
+                0.5f to Color.White.copy(alpha = 0.04f),
+                1f to Color.Transparent,
+                start = Offset(x(-0.36f), yAt(0.84f)),
+                end = Offset(x(0.10f), yAt(0.40f)),
+            ),
+        )
+        drawPath(canopy, Color.White.copy(alpha = 0.18f), style = Stroke(width = cw * 0.006f))
+        // 앞유리 위쪽 경계(차체색 띠)
         drawPath(
             Path().apply {
-                moveTo(cx - cw * 0.22f, yAt(0.25f))
-                lineTo(cx - cw * 0.04f, yAt(0.70f))
-                lineTo(cx + cw * 0.06f, yAt(0.70f))
-                lineTo(cx - cw * 0.12f, yAt(0.25f))
-                close()
+                moveTo(x(-0.345f), yAt(0.69f))
+                quadraticBezierTo(cx, yAt(0.715f), x(0.345f), yAt(0.69f))
             },
-            Color.White.copy(alpha = 0.10f),
+            Color(0xFFE6EBF1),
+            style = Stroke(width = cw * 0.016f, cap = StrokeCap.Round),
         )
-        // 지붕과 뒷유리 경계(은은한 선)
-        drawLine(
-            Color.White.copy(alpha = 0.18f),
-            Offset(cx - cw * 0.33f, yAt(0.40f)),
-            Offset(cx + cw * 0.33f, yAt(0.40f)),
-            strokeWidth = cw * 0.008f,
-        )
-        // 사이드미러
+
+        // 보닛의 두 줄 캐릭터 라인
         for (side in listOf(-1f, 1f)) {
-            drawRoundRect(
-                Color(0xFFD6DDE6),
-                topLeft = Offset(cx + side * cw * 0.50f - (if (side < 0) cw * 0.09f else 0f), yAt(0.75f)),
-                size = Size(cw * 0.09f, ch * 0.035f),
-                cornerRadius = CornerRadius(cw * 0.02f),
+            drawLine(
+                Color(0xFFC3CCD8).copy(alpha = 0.8f),
+                start = Offset(x(side * 0.17f), yAt(0.865f)),
+                end = Offset(x(side * 0.11f), yAt(0.975f)),
+                strokeWidth = cw * 0.005f,
+                cap = StrokeCap.Round,
             )
         }
-        // 트렁크 끝 하이라이트
-        drawLine(
-            Color.White,
-            Offset(cx - cw * 0.40f, yAt(0.13f)),
-            Offset(cx + cw * 0.40f, yAt(0.13f)),
-            strokeWidth = cw * 0.01f,
-            cap = StrokeCap.Round,
+        // 보닛 광택
+        drawOval(
+            Brush.radialGradient(listOf(Color.White.copy(alpha = 0.8f), Color.Transparent), center = Offset(x(-0.04f), yAt(0.92f)), radius = cw * 0.26f),
+            topLeft = Offset(x(-0.30f), yAt(0.97f)),
+            size = Size(cw * 0.52f, ch * 0.09f),
         )
     }
 }

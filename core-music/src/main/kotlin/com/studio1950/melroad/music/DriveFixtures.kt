@@ -25,7 +25,7 @@ object DriveFixtures {
         build(
             id = "coast",
             title = "제주 해안도로",
-            description = "바닷가를 따라 굽이치는 약 30분 여정 · 시뮬레이션",
+            description = "해안 굽이길 · 정차 · 언덕",
             seed = 0x4A454A55L, // "JEJU"
             startLat = 33.4640, startLon = 126.3100, startAltM = 12.0, startBearing = 245.0,
             segments = procedural(
@@ -52,7 +52,7 @@ object DriveFixtures {
         build(
             id = "hill",
             title = "언덕길",
-            description = "오르막과 굽은 길이 이어지는 약 20분 산길 · 시뮬레이션",
+            description = "오르막 · 급한 굽이 · 내리막",
             seed = 0x48494C4CL, // "HILL"
             startLat = 33.3600, startLon = 126.4600, startAltM = 300.0, startBearing = 20.0,
             segments = procedural(
@@ -74,7 +74,7 @@ object DriveFixtures {
         build(
             id = "city",
             title = "도심",
-            description = "신호 대기와 출발이 반복되는 약 15분 시내 · 시뮬레이션",
+            description = "신호 대기 · 출발 · 좌우회전",
             seed = 0x43495459L, // "CITY"
             startLat = 33.4990, startLon = 126.5310, startAltM = 30.0, startBearing = 90.0,
             segments = procedural(

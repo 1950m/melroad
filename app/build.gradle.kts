@@ -71,5 +71,9 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.android)
 
+    // Pleos Connect SDK: 실제 클래스·메서드를 확인한 뒤 어댑터를 연결한다(PleosApiProbeTest 참고).
+    implementation(libs.pleos.fusedlocation)
+    implementation(libs.pleos.vehicle)
+
     testImplementation(libs.junit)
 }

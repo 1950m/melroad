@@ -26,13 +26,13 @@ data class Theme(
 }
 
 object Themes {
-    /** 기본 테마: 라장조, 76 BPM, 피아노·패드 중심의 잔잔한 음색 */
+    /** 기본 테마: 라장조, 82 BPM(여정마다 80~86 사이에서 고정) */
     val WARM = Theme(
         id = "warm",
         displayName = "따뜻한 길",
         rootMidi = 62,
         scale = listOf(0, 2, 4, 5, 7, 9, 11),
-        bpm = 76,
+        bpm = 82,
     )
 
     val all = listOf(WARM)

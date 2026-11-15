@@ -80,8 +80,6 @@ fun HomeScreen(onStartTrip: () -> Unit, onOurMusic: () -> Unit, onInfo: () -> Un
                     color = Color.White,
                     modifier = Modifier.semantics { heading() },
                 )
-                HeroText(stringResource(R.string.home_tagline), large = true)
-                HeroText(stringResource(R.string.brand_copy), small = true)
             }
         }
         val actions: @Composable ColumnScope.() -> Unit = {

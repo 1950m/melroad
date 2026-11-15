@@ -17,8 +17,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // Pleos Connect SDK 저장소는 FusedLocation 어댑터(P6)를 실제로 연결할 때 추가한다.
-        // 공식 문서: https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/FusedLocation/project-setup
+        // Pleos Connect SDK(FusedLocation, Vehicle). 공식 문서의 project-setup 안내를 따른다.
+        maven("https://nexus-playground.pleos.ai/repository/maven-releases/") {
+            content { includeGroup("ai.pleos.playground") }
+        }
     }
 }
 
