@@ -48,6 +48,8 @@ val SceneBackground = Color(0xFFEEF2F6)
  * @param curve -1(왼쪽)..1(오른쪽) 도로가 휘는 정도
  * @param climb -1(내리막)..1(오르막) 시점 높이를 살짝 바꾼다
  * @param playing 음악 재생 중이면 경로 리본 위로 빛이 앞으로 흘러간다
+ * @param carYFraction 자동차를 놓을 세로 위치(화면 높이 비율). 첫 화면처럼 아래에 버튼이 겹치면 위로 올린다.
+ * @param carScale 자동차 크기 배율. 화면 가득 그리는 첫 화면에서는 작게 줄여 모형처럼 보이게 한다.
  */
 @Composable
 fun DriveScene(
@@ -56,6 +58,8 @@ fun DriveScene(
     climb: Float,
     playing: Boolean,
     modifier: Modifier = Modifier,
+    carYFraction: Float = 0.70f,
+    carScale: Float = 1f,
 ) {
     val curveAnim by animateFloatAsState(curve, spring(stiffness = Spring.StiffnessVeryLow), label = "curve")
     val climbAnim by animateFloatAsState(climb, tween(2500), label = "climb")
@@ -96,7 +100,7 @@ fun DriveScene(
                 0f to Color.Black,
                 0.40f to Color.Black,
                 0.84f to Color.Transparent,
-                center = Offset(w * 0.5f, h * 0.64f),
+                center = Offset(w * 0.5f, h * (carYFraction - 0.06f)),
                 radius = max(w, h) * 0.62f,
             ),
             blendMode = BlendMode.DstIn,
@@ -118,11 +122,11 @@ fun DriveScene(
         )
 
         // 자동차는 항상 가운데 차선 중심에 놓는다(그 거리에서의 도로 중심을 투영으로 계산)
-        val carY = h * 0.70f
+        val carY = h * carYFraction
         val carD = (h - view.vanishY) / (carY - view.vanishY)
         val carCenter = Offset(view.at(carD).first, carY)
         // 모형처럼 작게: 도로 폭 대비 차 폭이 과하지 않도록 한다.
-        val carWidth = min(w * 0.095f, h * 0.13f)
+        val carWidth = min(w * 0.095f, h * 0.13f) * carScale
         drawSedan(carCenter, carWidth, curveAnim, if (playing) time else 0f, playing)
 
         if (!reducedMotion) drawLightMotes(w, h, time, curveAnim, playing)
@@ -171,7 +175,8 @@ private class View(val w: Float, val h: Float, val vanishY: Float, val curve: Fl
  * 갓길 → 연석 → 노면(바퀴 자국) → 가운데 차선 경로 리본(테두리·흐르는 빛) → 차선 순서로 쌓는다.
  */
 private fun DrawScope.drawRoad(v: View, phase: Float, playing: Boolean, time: Float) {
-    val lane = v.w * 0.17f // 차선 하나의 반폭(화면 아래 기준). 차선 경계는 ±1, ±3
+    // 차선 하나의 반폭(화면 아래 기준). 차선 경계는 ±1, ±3. 가로로 넓은 전체 화면에서는 높이에 맞춰 도로가 과하게 넓어지지 않게 한다.
+    val lane = min(v.w * 0.17f, v.h * 0.22f)
     val far = 14f
 
     /** 가로 위치 left..right(차선 반폭 단위)를 거리 dFrom..dTo 구간에서 채우는 원근 면 */

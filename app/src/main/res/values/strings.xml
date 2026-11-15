@@ -4,7 +4,7 @@
     <string name="brand">MELROAD</string>
 
     <string name="action_start_trip">여행 시작</string>
-    <string name="action_our_music">우리의 음악</string>
+    <string name="action_our_music">뮤직박스</string>
     <string name="action_info">정보</string>
     <string name="action_back">뒤로</string>
 
@@ -67,7 +67,7 @@
     <string name="discard_driving">저장 안 함은 정차 후 선택 가능</string>
 
     <!-- S05 MEMORY -->
-    <string name="memory_title">우리의 음악</string>
+    <string name="memory_title">뮤직박스</string>
     <string name="memory_empty">저장된 음악 없음</string>
     <string name="memory_item_meta">%1$s · %2$s · %3$s</string>
     <string name="action_play">재생</string>

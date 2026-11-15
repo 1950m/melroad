@@ -2,6 +2,7 @@ package com.studio1950.melroad.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -29,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -66,34 +68,56 @@ fun SceneCard(
     }
 }
 
-/** S01 첫 화면: 왼쪽 주행 장면 위에 멜로드 로고를 얹고, 오른쪽에 큰 버튼 세 개만 둔다. */
+/**
+ * S01 첫 화면: 주행 장면을 화면 가득 크게 깔고, 위쪽 가운데에 멜로드 로고, 아래쪽에 큰 버튼 세 개를 얹는다.
+ * 버튼 뒤에는 옅은 흰빛을 깔아 장면 위에서도 글자 대비를 유지한다.
+ */
 @Composable
 fun HomeScreen(onStartTrip: () -> Unit, onOurMusic: () -> Unit, onInfo: () -> Unit) {
-    BoxWithConstraints(Modifier.fillMaxSize().padding(36.dp)) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth > 840.dp
-        val logo: @Composable BoxScope.() -> Unit = {
-            MelroadLogo(
-                name = stringResource(R.string.app_name),
-                wordmark = stringResource(R.string.brand),
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 40.dp),
-            )
-        }
-        val actions: @Composable ColumnScope.() -> Unit = {
-            BigButton(stringResource(R.string.action_start_trip), onStartTrip, icon = IconKind.PLAY)
-            BigButton(stringResource(R.string.action_our_music), onOurMusic, primary = false)
-            BigButton(stringResource(R.string.action_info), onInfo, primary = false)
-        }
+        DriveScene(
+            speedKmh = 30f,
+            curve = 0.15f,
+            climb = 0f,
+            playing = false,
+            modifier = Modifier.fillMaxSize(),
+            carYFraction = if (wide) 0.56f else 0.50f,
+            carScale = 0.72f,
+        )
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .fillMaxHeight(if (wide) 0.34f else 0.46f)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xFFEDF1F6).copy(alpha = 0.95f)))),
+        )
+        MelroadLogo(
+            name = stringResource(R.string.app_name),
+            wordmark = stringResource(R.string.brand),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 44.dp),
+        )
         if (wide) {
-            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(40.dp), verticalAlignment = Alignment.CenterVertically) {
-                SceneCard(Modifier.weight(1.25f).fillMaxHeight(), speedKmh = 30f, curve = 0.15f, overlay = logo)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                    actions()
-                }
+            Row(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .widthIn(max = 1500.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 48.dp, vertical = 40.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+            ) {
+                BigButton(stringResource(R.string.action_start_trip), onStartTrip, Modifier.weight(1.4f), icon = IconKind.PLAY)
+                BigButton(stringResource(R.string.action_our_music), onOurMusic, Modifier.weight(1f), primary = false)
+                BigButton(stringResource(R.string.action_info), onInfo, Modifier.weight(1f), primary = false)
             }
         } else {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-                SceneCard(Modifier.fillMaxWidth().height(320.dp), speedKmh = 30f, curve = 0.15f, overlay = logo)
-                actions()
+            Column(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(28.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                BigButton(stringResource(R.string.action_start_trip), onStartTrip, icon = IconKind.PLAY)
+                BigButton(stringResource(R.string.action_our_music), onOurMusic, primary = false)
+                BigButton(stringResource(R.string.action_info), onInfo, primary = false)
             }
         }
     }
