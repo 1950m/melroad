@@ -1,0 +1,512 @@
+package com.studio1950.melroad.audio
+
+import com.studio1950.melroad.music.Instrument
+import com.studio1950.melroad.music.MusicEvent
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.exp
+import kotlin.math.floor
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
+
+/**
+ * 자체 제작 합성 음색. 외부 샘플·음원을 쓰지 않아 라이선스 문제가 없다.
+ *
+ * - PIANO / PIANO_SOFT: 배음 5개 + 살짝 어긋난 두 번째 현(유니즌)으로 따뜻하게. 높은 배음일수록 빨리 사라진다.
+ * - EPIANO: FM 합성 일렉트릭 피아노. 어택의 금속성은 빠르게 사라지고 부드러운 몸통만 남는다. 트레몰로·오토팬.
+ * - STRINGS: 대역 제한 톱니파 3개(디튠) + 비브라토 + 저역 통과 필터. 느린 어택.
+ * - PAD: 따뜻한 파형 2개(디튠) + 저역 통과 필터.
+ * - BASS: 사인파 + 2배음, 둥근 저음.
+ * - GUITAR: 카플러스-스트롱(현 튕김) 합성. 부드러운 나일론 기타처럼 들리도록 들뜸 잡음을 미리 걸러 둔다.
+ * - PERC: 소프트 킥(음높이가 내려가는 사인파)·브러시·셰이커(걸러진 잡음). 날카로운 어택 없이 작게.
+ *
+ * 청각 피로를 줄이려고 날카로운 어택과 고배음을 약하게 잡고, 각 음색의 일부를 코러스 버스로 보낸다.
+ */
+internal class VoicePool(private val sampleRate: Int, size: Int = 64) {
+
+    private val voices = Array(size) { Voice() }
+    private var serial = 0L
+
+    fun trigger(event: MusicEvent) {
+        val v = voices.firstOrNull { !it.active }
+            ?: voices.filter { it.releasing }.minByOrNull { it.startSerial }
+            ?: voices.minBy { it.startSerial }
+        v.start(event, sampleRate, serial++)
+    }
+
+    fun allOff() {
+        for (v in voices) v.active = false
+    }
+
+    /** 건조 신호는 left/right에, 코러스 보낼 양은 busL/busR에 더한다. [from, to) 구간. */
+    fun render(left: FloatArray, right: FloatArray, busL: FloatArray, busR: FloatArray, from: Int, to: Int) {
+        if (from >= to) return
+        for (v in voices) if (v.active) v.render(left, right, busL, busR, from, to)
+    }
+
+    private class Voice {
+        var active = false
+        var releasing = false
+        var startSerial = 0L
+
+        private var instrument = Instrument.PIANO
+        private var sr = 44_100.0
+        private val freq = DoubleArray(6)
+        private val phase = DoubleArray(6)
+        private val amp = FloatArray(6)
+        private val decay = FloatArray(6)
+        private var partials = 0
+        private var gainL = 0f
+        private var gainR = 0f
+        private var send = 0f
+        private var age = 0L
+        private var noteOffAt = 0L
+        private var attackSamples = 1
+        private var releaseMul = 1f
+        private var releaseLevel = 1f
+        private var level = 1f
+
+        // FM(일렉트릭 피아노)
+        private var modPhase = 0.0
+        private var modIndex = 0f
+        private var modDecay = 1f
+
+        // 기타(카플러스-스트롱)
+        private var ks: FloatArray? = null
+        private var ksWrite = 0
+        private var ksDelay = 100.0
+        private var ksPrev = 0f
+        private var ksDecay = 0.99f
+        private var ksLevel = 0f
+
+        // 타악기
+        private var percType = 42
+        private var noiseState = 1L
+        private var noiseLow = 0f
+
+        // 필터·비브라토
+        private var lpCoef = 1f
+        private var lpL = 0f
+        private var lpR = 0f
+        private var lfoRate = 0.0
+
+        fun start(e: MusicEvent, sampleRate: Int, serialNo: Long) {
+            sr = sampleRate.toDouble()
+            instrument = e.instrument
+            startSerial = serialNo
+            active = true
+            releasing = false
+            age = 0
+            noteOffAt = e.durationMs * sampleRate / 1000
+            releaseLevel = 1f
+            lpL = 0f
+            lpR = 0f
+            modPhase = 0.0
+            for (i in phase.indices) phase[i] = 0.0
+            val f0 = 440.0 * 2.0.pow((e.pitch - 69) / 12.0)
+            val vel = (e.velocity / 127f).toDouble().pow(1.5).toFloat()
+            val bright = 0.6f + (e.expression / 127f) * 0.6f
+            var pan = 0f
+
+            when (instrument) {
+                Instrument.PIANO, Instrument.PIANO_SOFT -> {
+                    val scale = if (instrument == Instrument.PIANO) 0.34f else 0.22f
+                    partials = 6
+                    val base = (3.0 * sqrt(261.6 / f0)).coerceIn(0.7, 4.5)
+                    val shape = floatArrayOf(1f, 0.55f * bright, 0.34f * bright, 0.2f * bright, 0.11f * bright, 0.5f)
+                    for (k in 0 until 5) {
+                        // 약간의 비조화성으로 사인파 특유의 인공적인 느낌을 줄인다.
+                        freq[k] = f0 * (k + 1) * (1.0 + 0.00035 * k * k)
+                        amp[k] = vel * scale * shape[k]
+                        decay[k] = exp(-1.0 / ((base / (1.0 + 0.9 * k)) * sr)).toFloat()
+                    }
+                    // 두 번째 현: 기음을 아주 살짝 어긋나게 겹쳐 맥놀이로 따뜻함을 만든다.
+                    freq[5] = f0 * 1.0011
+                    amp[5] = vel * scale * shape[5]
+                    decay[5] = decay[0]
+                    attackSamples = (0.005 * sr).toInt().coerceAtLeast(1)
+                    releaseMul = exp(-1.0 / (0.32 * sr)).toFloat()
+                    pan = ((e.pitch - 64) / 40f).coerceIn(-0.4f, 0.4f)
+                    send = 0.18f
+                    lpCoef = 1f
+                }
+                Instrument.EPIANO -> {
+                    partials = 1
+                    freq[0] = f0
+                    amp[0] = vel * 0.30f
+                    decay[0] = exp(-1.0 / ((2.2 * sqrt(261.6 / f0)).coerceIn(0.8, 3.5) * sr)).toFloat()
+                    modIndex = 1.3f * (0.5f + vel)
+                    modDecay = exp(-1.0 / (0.30 * sr)).toFloat()
+                    attackSamples = (0.003 * sr).toInt().coerceAtLeast(1)
+                    releaseMul = exp(-1.0 / (0.35 * sr)).toFloat()
+                    lfoRate = 4.6
+                    send = 0.5f
+                    lpCoef = 1f
+                }
+                Instrument.STRINGS -> {
+                    partials = 3
+                    freq[0] = f0 * 0.9966
+                    freq[1] = f0
+                    freq[2] = f0 * 1.0034
+                    for (k in 0 until 3) {
+                        amp[k] = vel * 0.075f
+                        decay[k] = 1f
+                    }
+                    attackSamples = (0.55 * sr).toInt()
+                    releaseMul = exp(-1.0 / (0.9 * sr)).toFloat()
+                    lfoRate = 5.2
+                    send = 0.35f
+                    lpCoef = onePole(2600.0 + 3200.0 * bright)
+                }
+                Instrument.PAD -> {
+                    partials = 2
+                    freq[0] = f0 * 0.998
+                    freq[1] = f0 * 1.002
+                    amp[0] = vel * 0.09f
+                    amp[1] = vel * 0.09f
+                    decay[0] = 1f
+                    decay[1] = 1f
+                    attackSamples = (1.2 * sr).toInt()
+                    releaseMul = exp(-1.0 / (1.0 * sr)).toFloat()
+                    lfoRate = 0.2
+                    send = 0.4f
+                    lpCoef = onePole(1800.0 + 1600.0 * bright)
+                }
+                Instrument.GUITAR -> {
+                    partials = 0
+                    ksDelay = (sr / f0 - 0.5).coerceIn(2.0, 2000.0)
+                    val buf = ks ?: FloatArray(2048).also { ks = it }
+                    noiseState = serialNo * 6364136223846793005L + 1442695040888963407L
+                    var smooth = 0f
+                    for (i in buf.indices) {
+                        smooth += 0.42f * (nextNoise() - smooth)
+                        buf[i] = smooth * vel * 0.85f
+                    }
+                    ksWrite = 0
+                    ksPrev = 0f
+                    ksLevel = 1f
+                    // 음높이와 관계없이 약 2.2초에 -60dB가 되도록 주기당 감쇠를 정한다.
+                    ksDecay = exp(kotlin.math.ln(0.001) / (f0 * 2.2)).toFloat()
+                    attackSamples = 1
+                    releaseMul = exp(-1.0 / (0.25 * sr)).toFloat()
+                    pan = ((e.pitch - 60) / 50f).coerceIn(-0.3f, 0.3f)
+                    send = 0.25f
+                    lpCoef = onePole(3200.0)
+                }
+                Instrument.PERC -> {
+                    partials = 0
+                    percType = e.pitch
+                    noiseState = serialNo * 2862933555777941757L + 3037000493L
+                    noiseLow = 0f
+                    val (scale, seconds, attack) = when (percType) {
+                        36 -> Triple(0.55f, 0.22, 0.002)
+                        38 -> Triple(0.10f, 0.11, 0.008)
+                        else -> Triple(0.06f, 0.045, 0.004)
+                    }
+                    amp[0] = vel * scale
+                    decay[0] = exp(-1.0 / (seconds * sr)).toFloat()
+                    attackSamples = (attack * sr).toInt().coerceAtLeast(1)
+                    noteOffAt = Long.MAX_VALUE // 짧은 타악은 길이 대신 자연 감쇠로 끝난다
+                    releaseMul = 1f
+                    pan = when (percType) {
+                        38 -> -0.2f
+                        42 -> 0.25f
+                        else -> 0f
+                    }
+                    send = 0f
+                    lpCoef = onePole(
+                        when (percType) {
+                            36 -> 400.0
+                            38 -> 5000.0
+                            else -> 9000.0
+                        },
+                    )
+                }
+                Instrument.BASS -> {
+                    partials = 2
+                    freq[0] = f0
+                    freq[1] = f0 * 2.0
+                    amp[0] = vel * 0.32f
+                    amp[1] = vel * 0.07f
+                    decay[0] = 1f
+                    decay[1] = exp(-1.0 / (0.8 * sr)).toFloat()
+                    attackSamples = (0.015 * sr).toInt()
+                    releaseMul = exp(-1.0 / (0.3 * sr)).toFloat()
+                    send = 0f
+                    lpCoef = onePole(900.0)
+                }
+            }
+            val angle = (pan + 1f) * (PI / 4).toFloat()
+            gainL = cos(angle)
+            gainR = sin(angle)
+        }
+
+        private fun onePole(cutoffHz: Double): Float = (1.0 - exp(-2.0 * PI * cutoffHz / sr)).toFloat()
+
+        private fun nextNoise(): Float {
+            noiseState = noiseState * 6364136223846793005L + 1442695040888963407L
+            return ((noiseState ushr 33).toInt() / 2147483648f) * 2f - 1f
+        }
+
+        fun render(left: FloatArray, right: FloatArray, busL: FloatArray, busR: FloatArray, from: Int, to: Int) {
+            for (i in from until to) {
+                val t = age / sr
+                val env: Float = when {
+                    age < attackSamples -> {
+                        val x = age.toFloat() / attackSamples
+                        if (instrument == Instrument.PAD || instrument == Instrument.STRINGS) x * x * (3 - 2 * x) else x
+                    }
+                    instrument == Instrument.BASS -> (0.75 + 0.25 * exp(-t / 0.4)).toFloat()
+                    else -> 1f
+                }
+                if (age >= noteOffAt) {
+                    releasing = true
+                    releaseLevel *= releaseMul
+                }
+
+                var outL = 0f
+                var outR = 0f
+                var alive = true
+                when (instrument) {
+                    Instrument.PIANO, Instrument.PIANO_SOFT, Instrument.BASS -> {
+                        var s = 0f
+                        alive = false
+                        for (k in 0 until partials) {
+                            val a = amp[k]
+                            if (a < 1e-5f) continue
+                            alive = true
+                            phase[k] += freq[k] / sr
+                            if (phase[k] >= 1.0) phase[k] -= 1.0
+                            s += a * Wave.sine(phase[k])
+                            amp[k] = a * decay[k]
+                        }
+                        if (instrument == Instrument.BASS) {
+                            lpL += lpCoef * (s - lpL)
+                            s = lpL
+                        }
+                        outL = s * gainL
+                        outR = s * gainR
+                    }
+                    Instrument.EPIANO -> {
+                        modPhase += freq[0] / sr
+                        if (modPhase >= 1.0) modPhase -= 1.0
+                        phase[0] += freq[0] / sr
+                        if (phase[0] >= 1.0) phase[0] -= 1.0
+                        val index = modIndex + 0.3f
+                        val s = amp[0] * Wave.sine(phase[0] + index * Wave.sine(modPhase) / (2 * PI))
+                        amp[0] *= decay[0]
+                        modIndex *= modDecay
+                        if (amp[0] < 1e-5f) alive = false
+                        // 트레몰로 겸 오토팬: 좌우가 반대로 흔들리며 부드럽게 퍼진다
+                        val trem = Wave.sine(t * lfoRate) * 0.18f
+                        outL = s * (0.72f + trem)
+                        outR = s * (0.72f - trem)
+                    }
+                    Instrument.STRINGS -> {
+                        // 0.4초 뒤부터 비브라토가 서서히 들어온다
+                        val vibDepth = (((t - 0.4) / 0.8).coerceIn(0.0, 1.0) * 0.0025)
+                        val vib = 1.0 + vibDepth * Wave.sine(t * lfoRate)
+                        var l = 0f
+                        var r = 0f
+                        for (k in 0 until 3) {
+                            phase[k] += freq[k] * vib / sr
+                            if (phase[k] >= 1.0) phase[k] -= 1.0
+                            val s = amp[k] * Wave.saw(phase[k])
+                            when (k) {
+                                0 -> l += s
+                                2 -> r += s
+                                else -> {
+                                    l += s * 0.7f
+                                    r += s * 0.7f
+                                }
+                            }
+                        }
+                        lpL += lpCoef * (l - lpL)
+                        lpR += lpCoef * (r - lpR)
+                        outL = lpL
+                        outR = lpR
+                    }
+                    Instrument.GUITAR -> {
+                        val buf = ks!!
+                        val size = buf.size
+                        var readPos = ksWrite - ksDelay
+                        if (readPos < 0) readPos += size
+                        val i0 = readPos.toInt() % size
+                        val i1 = (i0 + 1) % size
+                        val frac = (readPos - floor(readPos)).toFloat()
+                        val y = buf[i0] + (buf[i1] - buf[i0]) * frac
+                        buf[ksWrite] = (y + ksPrev) * 0.5f * ksDecay
+                        ksPrev = y
+                        ksWrite = (ksWrite + 1) % size
+                        lpL += lpCoef * (y - lpL)
+                        ksLevel = maxOf(kotlin.math.abs(y), ksLevel * 0.9997f)
+                        if (age > attackSamples + 2_000 && ksLevel < 1e-4f) alive = false
+                        outL = lpL * gainL
+                        outR = lpL * gainR
+                    }
+                    Instrument.PERC -> {
+                        val a = amp[0]
+                        val s: Float
+                        if (percType == 36) {
+                            // 음높이가 115Hz → 45Hz로 빠르게 내려가는 부드러운 킥
+                            val f = 45.0 + 70.0 * exp(-t / 0.03)
+                            phase[0] += f / sr
+                            if (phase[0] >= 1.0) phase[0] -= 1.0
+                            s = a * Wave.sine(phase[0])
+                        } else {
+                            val n = nextNoise()
+                            noiseLow += 0.12f * (n - noiseLow)
+                            s = a * (n - noiseLow) // 저역을 덜어 낸 잡음
+                        }
+                        amp[0] = a * decay[0]
+                        lpL += lpCoef * (s - lpL)
+                        if (amp[0] < 1e-4f) alive = false
+                        outL = lpL * gainL
+                        outR = lpL * gainR
+                    }
+                    Instrument.PAD -> {
+                        var l = 0f
+                        var r = 0f
+                        for (k in 0 until 2) {
+                            phase[k] += freq[k] / sr
+                            if (phase[k] >= 1.0) phase[k] -= 1.0
+                            val s = amp[k] * Wave.warm(phase[k])
+                            if (k == 0) l += s else r += s
+                        }
+                        val breath = 1f + 0.08f * Wave.sine(t * lfoRate)
+                        lpL += lpCoef * (l * breath - lpL)
+                        lpR += lpCoef * (r * breath - lpR)
+                        outL = lpL
+                        outR = lpR
+                    }
+                }
+
+                val g = env * releaseLevel
+                val l = outL * g
+                val r = outR * g
+                left[i] += l
+                right[i] += r
+                if (send > 0f) {
+                    busL[i] += l * send
+                    busR[i] += r * send
+                }
+                age++
+                if (!alive || releaseLevel < 2e-3f) {
+                    active = false
+                    return
+                }
+            }
+        }
+    }
+}
+
+/** 파형 테이블. 톱니·따뜻한 파형은 배음 수를 제한해 거친 고역(에일리어싱)을 줄였다. */
+internal object Wave {
+    private const val SIZE = 4096
+    private val sineTable = FloatArray(SIZE + 1) { i -> sin(2 * PI * i / SIZE).toFloat() }
+    private val sawTable = build { x -> (1..12).sumOf { n -> sin(2 * PI * n * x) / n } * 0.55 }
+    private val warmTable = build { x ->
+        sin(2 * PI * x) + 0.35 * sin(4 * PI * x) + 0.12 * sin(6 * PI * x) + 0.05 * sin(8 * PI * x)
+    }
+
+    private fun build(f: (Double) -> Double): FloatArray =
+        FloatArray(SIZE + 1) { i -> f(i.toDouble() / SIZE).toFloat() }
+
+    fun sine(phase: Double): Float = lookup(sineTable, phase)
+    fun saw(phase: Double): Float = lookup(sawTable, phase)
+    fun warm(phase: Double): Float = lookup(warmTable, phase)
+
+    private fun lookup(table: FloatArray, phase: Double): Float {
+        val p = phase - floor(phase)
+        val x = p * SIZE
+        val i = x.toInt().coerceIn(0, SIZE - 1)
+        val frac = (x - i).toFloat()
+        return table[i] + (table[i + 1] - table[i]) * frac
+    }
+}
+
+/** 코러스: 살짝 흔들리는 짧은 지연을 좌우로 다르게 섞어 음을 넓고 부드럽게 만든다. */
+internal class StereoChorus(private val sampleRate: Int) {
+    private val size = 4096
+    private val bufL = FloatArray(size)
+    private val bufR = FloatArray(size)
+    private var write = 0
+    private var lfo1 = 0.0
+    private var lfo2 = 0.25
+
+    fun process(busL: FloatArray, busR: FloatArray, outL: FloatArray, outR: FloatArray, count: Int) {
+        val base = 0.016 * sampleRate
+        val depth = 0.004 * sampleRate
+        val inc1 = 0.23 / sampleRate
+        val inc2 = 0.31 / sampleRate
+        for (i in 0 until count) {
+            bufL[write] = busL[i]
+            bufR[write] = busR[i]
+            lfo1 += inc1
+            lfo2 += inc2
+            if (lfo1 >= 1.0) lfo1 -= 1.0
+            if (lfo2 >= 1.0) lfo2 -= 1.0
+            outL[i] += read(bufR, base + depth * Wave.sine(lfo1)) * 0.6f
+            outR[i] += read(bufL, base + depth * Wave.sine(lfo2)) * 0.6f
+            write = (write + 1) % size
+        }
+    }
+
+    private fun read(buf: FloatArray, delaySamples: Double): Float {
+        var pos = write - delaySamples
+        while (pos < 0) pos += size
+        val i = pos.toInt() % size
+        val j = (i + 1) % size
+        val frac = (pos - floor(pos)).toFloat()
+        return buf[i] + (buf[j] - buf[i]) * frac
+    }
+}
+
+/** Freeverb 구조의 스테레오 리버브(콤 8 + 올패스 4). 길고 부드러운 잔향으로 공간감을 준다. */
+internal class StereoReverb(sampleRate: Int) {
+    private val scale = sampleRate / 44_100.0
+    private val combsL = intArrayOf(1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617).map { Comb((it * scale).toInt()) }
+    private val combsR = intArrayOf(1139, 1211, 1300, 1379, 1445, 1514, 1580, 1640).map { Comb((it * scale).toInt()) }
+    private val apL = intArrayOf(556, 441, 341, 225).map { AllPass((it * scale).toInt()) }
+    private val apR = intArrayOf(579, 464, 364, 248).map { AllPass((it * scale).toInt()) }
+
+    fun process(left: FloatArray, right: FloatArray, count: Int, wet: Float) {
+        for (i in 0 until count) {
+            val input = (left[i] + right[i]) * 0.015f
+            var l = 0f
+            var r = 0f
+            for (c in combsL) l += c.process(input)
+            for (c in combsR) r += c.process(input)
+            for (a in apL) l = a.process(l)
+            for (a in apR) r = a.process(r)
+            left[i] += l * wet
+            right[i] += r * wet
+        }
+    }
+
+    private class Comb(size: Int) {
+        private val buf = FloatArray(size.coerceAtLeast(1))
+        private var idx = 0
+        private var store = 0f
+        fun process(x: Float): Float {
+            val y = buf[idx]
+            store = y * 0.8f + store * 0.2f // 약한 고역 감쇠(부드럽지만 답답하지 않은 잔향)
+            buf[idx] = x + store * 0.88f
+            idx = (idx + 1) % buf.size
+            return y
+        }
+    }
+
+    private class AllPass(size: Int) {
+        private val buf = FloatArray(size.coerceAtLeast(1))
+        private var idx = 0
+        fun process(x: Float): Float {
+            val b = buf[idx]
+            val y = -x + b
+            buf[idx] = x + b * 0.5f
+            idx = (idx + 1) % buf.size
+            return y
+        }
+    }
+}

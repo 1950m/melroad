@@ -1,0 +1,35 @@
+# Gradle / Android Studio
+.gradle/
+build/
+/captures
+.externalNativeBuild/
+.cxx/
+*.iml
+.idea/
+.kotlin/
+
+# 로컬 환경·비밀정보 (절대 커밋 금지)
+local.properties
+.env
+.env.*
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+google-services.json
+
+# 개인 로그·실사용 위치 기록
+*.log
+logs/
+drive-logs/
+*.hprof
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 동기화 임시 파일
+.melroad-sync*
+
+# 개발 브리지 작업 파일(로컬 전용)
+.bridge/
